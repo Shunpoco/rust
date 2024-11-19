@@ -1637,6 +1637,10 @@ impl Step for Compiletest {
     /// compiletest `mode` and `suite` arguments. For example `mode` can be
     /// "run-pass" or `suite` can be something like `debuginfo`.
     fn run(self, builder: &Builder<'_>) {
+        println!(
+            "Compiletest.run: path: {}, mode: {}, suite: {}",
+            self.path, self.mode, self.suite,
+        );
         if builder.doc_tests == DocTests::Only {
             return;
         }

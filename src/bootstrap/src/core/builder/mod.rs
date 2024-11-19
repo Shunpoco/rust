@@ -374,6 +374,8 @@ impl StepDescription {
     }
 
     fn maybe_run(&self, builder: &Builder<'_>, mut pathsets: Vec<PathSet>) {
+        println!("maybe run...");
+        println!("{:?}", &pathsets);
         pathsets.retain(|set| !self.is_excluded(builder, set));
 
         if pathsets.is_empty() {
@@ -409,11 +411,13 @@ impl StepDescription {
     }
 
     fn run(v: &[StepDescription], builder: &Builder<'_>, paths: &[PathBuf]) {
+        println!("Run!");
         let should_runs = v
             .iter()
             .map(|desc| (desc.should_run)(ShouldRun::new(builder, desc.kind)))
             .collect::<Vec<_>>();
 
+        println!("built should_runs");
         if builder.download_rustc() && (builder.kind == Kind::Dist || builder.kind == Kind::Install)
         {
             eprintln!(
@@ -423,6 +427,7 @@ impl StepDescription {
             crate::exit!(1);
         }
 
+        println!("do sanity check...");
         // sanity checks on rules
         for (desc, should_run) in v.iter().zip(&should_runs) {
             assert!(
@@ -431,6 +436,7 @@ impl StepDescription {
                 desc.name
             );
         }
+        println!("done!");
 
         if paths.is_empty() || builder.config.include_default_paths {
             for (desc, should_run) in v.iter().zip(&should_runs) {
@@ -460,23 +466,30 @@ impl StepDescription {
             })
             .collect();
 
+        println!("!!!!!!!!!!!!!!!!!");
+        println!("{:?}", &paths);
         remap_paths(&mut paths);
+        println!("{:?}", &paths);
 
         // Handle all test suite paths.
         // (This is separate from the loop below to avoid having to handle multiple paths in `is_suite_path` somehow.)
         paths.retain(|path| {
             for (desc, should_run) in v.iter().zip(&should_runs) {
                 if let Some(suite) = should_run.is_suite_path(path) {
+                    println!("handle~~~~~");
                     desc.maybe_run(builder, vec![suite.clone()]);
                     return false;
                 }
             }
+            println!("eeeeee");
             true
         });
 
+        println!("11111");
         if paths.is_empty() {
             return;
         }
+        println!("222222");
 
         let mut path_lookup: Vec<(PathBuf, bool)> =
             paths.clone().into_iter().map(|p| (p, false)).collect();
@@ -514,6 +527,7 @@ impl StepDescription {
         // Handle all PathSets.
         for (_index, desc, pathsets) in steps_to_run {
             if !pathsets.is_empty() {
+                println!("maybe...!");
                 desc.maybe_run(builder, pathsets);
             }
         }
@@ -1095,6 +1109,7 @@ impl<'a> Builder<'a> {
     }
 
     pub fn execute_cli(&self) {
+        println!("{:?}", self.kind);
         self.run_step_descriptions(&Builder::get_step_descriptions(self.kind), &self.paths);
     }
 

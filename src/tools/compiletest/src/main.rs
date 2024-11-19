@@ -6,6 +6,7 @@ use compiletest::common::Mode;
 use compiletest::{log_config, parse_config, run_tests};
 
 fn main() {
+    println!("compiletest~~~~");
     tracing_subscriber::fmt::init();
 
     // colored checks stdout by default, but for some reason only stderr is a terminal.
