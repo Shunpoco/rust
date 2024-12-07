@@ -42,6 +42,7 @@ impl AuxProps {
 /// If the given test directive line contains an `aux-*` directive, parse it
 /// and update [`AuxProps`] accordingly.
 pub(super) fn parse_and_update_aux(config: &Config, ln: &str, aux: &mut AuxProps) {
+    println!("parse_and_update_aux");
     if !(ln.starts_with("aux-") || ln.starts_with("proc-macro")) {
         return;
     }

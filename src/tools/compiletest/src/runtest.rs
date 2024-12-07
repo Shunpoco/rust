@@ -254,6 +254,7 @@ impl<'test> TestCx<'test> {
     /// Code executed for each revision in turn (or, if there are no
     /// revisions, exactly once, with revision == None).
     fn run_revision(&self) {
+        println!("TestDA!");
         if self.props.should_ice && self.config.mode != Incremental && self.config.mode != Crashes {
             self.fatal("cannot use should-ice in a test that is not cfail");
         }
@@ -1065,6 +1066,7 @@ impl<'test> TestCx<'test> {
     /// For each `aux-build: foo/bar` annotation, we check to find the file in an `auxiliary`
     /// directory relative to the test itself (not any intermediate auxiliaries).
     fn compute_aux_test_paths(&self, of: &TestPaths, rel_ab: &str) -> TestPaths {
+        println!("11111{}", rel_ab);
         let test_ab =
             of.file.parent().expect("test file path has no parent").join("auxiliary").join(rel_ab);
         if !test_ab.exists() {
@@ -1122,11 +1124,14 @@ impl<'test> TestCx<'test> {
     }
 
     fn build_all_auxiliary(&self, of: &TestPaths, aux_dir: &Path, rustc: &mut Command) {
+        println!("{:?}", &self.props.aux.builds);
         for rel_ab in &self.props.aux.builds {
+            println!("prop.aux.builds: {}", rel_ab);
             self.build_auxiliary(of, rel_ab, &aux_dir, None);
         }
-
+        println!("uuu");
         for rel_ab in &self.props.aux.bins {
+            println!("prop.aux.bins: {}", rel_ab);
             self.build_auxiliary(of, rel_ab, &aux_dir, Some(AuxType::Bin));
         }
 
@@ -1151,11 +1156,13 @@ impl<'test> TestCx<'test> {
             };
 
         for (aux_name, aux_path) in &self.props.aux.crates {
+            println!("props.aux.crates: {}", aux_name);
             let aux_type = self.build_auxiliary(of, &aux_path, &aux_dir, None);
             add_extern(rustc, aux_name, aux_path, aux_type);
         }
 
         for proc_macro in &self.props.aux.proc_macros {
+            println!("props.aux.proc_macros: {}", proc_macro);
             self.build_auxiliary(of, proc_macro, &aux_dir, Some(AuxType::ProcMacro));
             let crate_name = path_to_crate_name(proc_macro);
             add_extern(rustc, &crate_name, proc_macro, AuxType::ProcMacro);
@@ -1164,6 +1171,7 @@ impl<'test> TestCx<'test> {
         // Build any `//@ aux-codegen-backend`, and pass the resulting library
         // to `-Zcodegen-backend` when compiling the test file.
         if let Some(aux_file) = &self.props.aux.codegen_backend {
+            println!("props.aux.codegen_backend: {}", aux_file);
             let aux_type = self.build_auxiliary(of, aux_file, aux_dir, None);
             if let Some(lib_name) = get_lib_name(aux_file.trim_end_matches(".rs"), aux_type) {
                 let lib_path = aux_dir.join(&lib_name);
@@ -1180,6 +1188,8 @@ impl<'test> TestCx<'test> {
         input: Option<String>,
         root_testpaths: &TestPaths,
     ) -> ProcRes {
+        println!("compose and run compier");
+        println!("{:?}", root_testpaths);
         if self.props.add_core_stubs {
             let minicore_path = self.build_minicore();
             rustc.arg("--extern");
@@ -1233,6 +1243,7 @@ impl<'test> TestCx<'test> {
     /// Builds an aux dependency.
     ///
     /// If `aux_type` is `None`, then this will determine the aux-type automatically.
+    #[allow(unreachable_code, unused_variables, unused_mut)]
     fn build_auxiliary(
         &self,
         of: &TestPaths,
@@ -1240,6 +1251,7 @@ impl<'test> TestCx<'test> {
         aux_dir: &Path,
         aux_type: Option<AuxType>,
     ) -> AuxType {
+        println!("koko?");
         let aux_testpaths = self.compute_aux_test_paths(of, source_path);
         let mut aux_props =
             self.props.from_aux_file(&aux_testpaths.file, self.revision, self.config);
@@ -1271,6 +1283,10 @@ impl<'test> TestCx<'test> {
             LinkToAux::No,
             Vec::new(),
         );
+
+        println!("{:?}", &aux_cx.props.aux.builds);
+        panic!("abcdefg...");
+        // これが怪しい、TestCxを新たに作って再帰になってるっぽい
         aux_cx.build_all_auxiliary(of, &aux_dir, &mut aux_rustc);
 
         aux_rustc.envs(aux_props.rustc_env.clone());

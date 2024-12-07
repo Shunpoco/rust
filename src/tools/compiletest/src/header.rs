@@ -50,6 +50,7 @@ impl EarlyProps {
     }
 
     pub fn from_reader<R: Read>(config: &Config, testfile: &Path, rdr: R) -> Self {
+        println!("EarlyProps.from_reader");
         let mut props = EarlyProps::default();
         let mut poisoned = false;
         iter_header(
@@ -330,6 +331,7 @@ impl TestProps {
     /// `//@[foo]`), then the property is ignored unless `test_revision` is
     /// `Some("foo")`.
     fn load_from(&mut self, testfile: &Path, test_revision: Option<&str>, config: &Config) {
+        println!("load_from");
         let mut has_edition = false;
         if !testfile.is_dir() {
             let file = File::open(testfile).unwrap();
