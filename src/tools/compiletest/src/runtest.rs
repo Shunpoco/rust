@@ -1123,16 +1123,16 @@ impl<'test> TestCx<'test> {
         aux_dir
     }
 
-    fn build_all_auxiliary(&self, of: &TestPaths, aux_dir: &Path, rustc: &mut Command) {
+    fn build_all_auxiliary(&self, of: &TestPaths, aux_dir: &Path, rustc: &mut Command, hs: &mut HashSet<String>) {
         println!("{:?}", &self.props.aux.builds);
         for rel_ab in &self.props.aux.builds {
             println!("prop.aux.builds: {}", rel_ab);
-            self.build_auxiliary(of, rel_ab, &aux_dir, None);
+            self.build_auxiliary(of, rel_ab, &aux_dir, None, hs);
         }
         println!("uuu");
         for rel_ab in &self.props.aux.bins {
             println!("prop.aux.bins: {}", rel_ab);
-            self.build_auxiliary(of, rel_ab, &aux_dir, Some(AuxType::Bin));
+            self.build_auxiliary(of, rel_ab, &aux_dir, Some(AuxType::Bin), hs);
         }
 
         let path_to_crate_name = |path: &str| -> String {
@@ -1157,13 +1157,13 @@ impl<'test> TestCx<'test> {
 
         for (aux_name, aux_path) in &self.props.aux.crates {
             println!("props.aux.crates: {}", aux_name);
-            let aux_type = self.build_auxiliary(of, &aux_path, &aux_dir, None);
+            let aux_type = self.build_auxiliary(of, &aux_path, &aux_dir, None, hs);
             add_extern(rustc, aux_name, aux_path, aux_type);
         }
 
         for proc_macro in &self.props.aux.proc_macros {
             println!("props.aux.proc_macros: {}", proc_macro);
-            self.build_auxiliary(of, proc_macro, &aux_dir, Some(AuxType::ProcMacro));
+            self.build_auxiliary(of, proc_macro, &aux_dir, Some(AuxType::ProcMacro), hs);
             let crate_name = path_to_crate_name(proc_macro);
             add_extern(rustc, &crate_name, proc_macro, AuxType::ProcMacro);
         }
@@ -1172,7 +1172,7 @@ impl<'test> TestCx<'test> {
         // to `-Zcodegen-backend` when compiling the test file.
         if let Some(aux_file) = &self.props.aux.codegen_backend {
             println!("props.aux.codegen_backend: {}", aux_file);
-            let aux_type = self.build_auxiliary(of, aux_file, aux_dir, None);
+            let aux_type = self.build_auxiliary(of, aux_file, aux_dir, None, hs);
             if let Some(lib_name) = get_lib_name(aux_file.trim_end_matches(".rs"), aux_type) {
                 let lib_path = aux_dir.join(&lib_name);
                 rustc.arg(format!("-Zcodegen-backend={}", lib_path.display()));
@@ -1197,7 +1197,8 @@ impl<'test> TestCx<'test> {
         }
 
         let aux_dir = self.aux_output_dir();
-        self.build_all_auxiliary(root_testpaths, &aux_dir, &mut rustc);
+        let mut hs: HashSet<String> = HashSet::new();
+        self.build_all_auxiliary(root_testpaths, &aux_dir, &mut rustc, &mut hs);
 
         rustc.envs(self.props.rustc_env.clone());
         self.props.unset_rustc_env.iter().fold(&mut rustc, Command::env_remove);
@@ -1250,8 +1251,15 @@ impl<'test> TestCx<'test> {
         source_path: &str,
         aux_dir: &Path,
         aux_type: Option<AuxType>,
+        hs: &mut HashSet<String>,
     ) -> AuxType {
         println!("koko?");
+        if hs.contains(source_path) {
+            panic!("cyclic: {}", source_path);
+        }
+
+        hs.insert(source_path.to_string());
+
         let aux_testpaths = self.compute_aux_test_paths(of, source_path);
         let mut aux_props =
             self.props.from_aux_file(&aux_testpaths.file, self.revision, self.config);
@@ -1285,9 +1293,9 @@ impl<'test> TestCx<'test> {
         );
 
         println!("{:?}", &aux_cx.props.aux.builds);
-        panic!("abcdefg...");
+        // panic!("abcdefg...");
         // これが怪しい、TestCxを新たに作って再帰になってるっぽい
-        aux_cx.build_all_auxiliary(of, &aux_dir, &mut aux_rustc);
+        aux_cx.build_all_auxiliary(of, &aux_dir, &mut aux_rustc, hs);
 
         aux_rustc.envs(aux_props.rustc_env.clone());
         for key in &aux_props.unset_rustc_env {
@@ -2018,7 +2026,8 @@ impl<'test> TestCx<'test> {
             Vec::new(),
         );
         let aux_dir = new_rustdoc.aux_output_dir();
-        new_rustdoc.build_all_auxiliary(&new_rustdoc.testpaths, &aux_dir, &mut rustc);
+        let mut hs: HashSet<String> = HashSet::new();
+        new_rustdoc.build_all_auxiliary(&new_rustdoc.testpaths, &aux_dir, &mut rustc, &mut hs);
 
         let proc_res = new_rustdoc.document(&compare_dir, &new_rustdoc.testpaths);
         if !proc_res.status.success() {
