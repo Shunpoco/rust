@@ -75,10 +75,7 @@ pub(crate) fn check_cycles(config: &Config, dir: &Path) -> io::Result<()> {
     let mut vertices = vec![];
     let mut edges= HashMap::new();
 
-    match build_graph(config, dir, &mut vertices, &mut edges) {
-        Ok(_) => {},
-        Err(_) => panic!(""),
-    };
+    build_graph(config, dir, &mut vertices, &mut edges)?;
 
     if edges.len() > 0 {
         println!("====================================");
@@ -96,7 +93,6 @@ fn build_graph(config: &Config, dir: &Path, vertices: &mut Vec<String>, edges: &
         let file = file?;
         let file_path = file.path();
 
-
         if file_path.is_dir() {
             match build_graph(config, &file_path, vertices, edges) {
                 Ok(_) => {},
@@ -106,7 +102,7 @@ fn build_graph(config: &Config, dir: &Path, vertices: &mut Vec<String>, edges: &
             vertices.push(file.file_name().into_string().unwrap());
             let mut aux = AuxProps::default();
             let mut poisoned = false;
-            let f = File::open(file_path).expect("open test file to parse earlyprops");
+            let f = File::open(file_path).expect("open test file to parse aux for cycle detection");
             iter_header(
                 config.mode,
                 &config.suite,
