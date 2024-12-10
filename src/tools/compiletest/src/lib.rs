@@ -763,10 +763,8 @@ fn collect_tests_from_dir(
             if &file_name != "auxiliary" {
                 debug!("found directory: {:?}", file_path.display());
                 collect_tests_from_dir(cx, collector, &file_path, &relative_file_path)?;
-            } else if check_cycles(&cx.config, &file_path) {
-                return Err(io::Error::other(
-                    "detects a cyclic dependencies in auxiliary",
-                ));
+            } else {
+                check_cycles(&cx.config, &file_path)?;
             }
         } else {
             debug!("found other file/directory: {:?}", file_path.display());

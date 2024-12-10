@@ -71,7 +71,7 @@ fn parse_aux_crate(r: String) -> (String, String) {
     )
 }
 
-pub(crate) fn check_cycles(config: &Config, dir: &Path) -> bool {
+pub(crate) fn check_cycles(config: &Config, dir: &Path) -> io::Result<()> {
     let mut vertices = vec![];
     let mut edges= HashMap::new();
 
@@ -133,16 +133,14 @@ fn build_graph(config: &Config, dir: &Path, vertices: &mut Vec<String>, edges: &
     Ok(())
 }
 
-fn has_cycle(vertices: &Vec<String>, edges: &HashMap<String, Vec<String>>) -> bool {
+fn has_cycle(vertices: &Vec<String>, edges: &HashMap<String, Vec<String>>) -> io::Result<()> {
     let mut checked = HashSet::with_capacity(vertices.len());
     let mut on_search = HashSet::with_capacity(4);
     let mut path = Vec::new();
 
     for vertex in vertices.iter() {
         if !checked.contains(vertex) {
-            if search(vertices, edges, &vertex, &mut checked, &mut on_search, &mut path) {
-                return true;
-            }
+            search(vertices, edges, &vertex, &mut checked, &mut on_search, &mut path)?;
         }
     }
 
@@ -153,7 +151,7 @@ fn has_cycle(vertices: &Vec<String>, edges: &HashMap<String, Vec<String>>) -> bo
         checked: &mut HashSet<String>,
         on_search: &mut HashSet<String>,
         path: &mut Vec<String>,
-    ) -> bool {
+    ) -> io::Result<()> {
         if !on_search.insert(vertex.to_string()) {
             let mut cyclic_path = vec![vertex];
             for v in path.iter().rev() {
@@ -166,24 +164,24 @@ fn has_cycle(vertices: &Vec<String>, edges: &HashMap<String, Vec<String>>) -> bo
 
             println!("detect!!!!!!!! 1 {:?}", cyclic_path);
 
-            return true;
+            return Err(io::Error::other(
+                "detect1",
+            ));
         }
 
         if checked.insert(vertex.to_string()) {
             path.push(vertex.to_string());
             if let Some(e) = edges.get(&vertex.to_string()) {
                 for to in e.iter() {
-                    if search(vertices, edges, &to, checked, on_search, path) {
-                        println!("detect!!!!!!!!!2 {}, {:?} {:?}", vertex, vertices, edges);
-                        return true;
-                    }
+                    search(vertices, edges, &to, checked, on_search, path)?;
                 }    
             }
         }
 
         on_search.remove(&vertex.to_string());
-        false
+        
+        Ok(())
     }
 
-    false
+    Ok(())
 }
