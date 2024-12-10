@@ -99,14 +99,14 @@ fn build_graph(config: &Config, dir: &Path, base_dir: &Path, vertices: &mut Vec<
         if file_path.is_dir() {
             build_graph(config, &file_path, base_dir, vertices, edges)?;
         } else {
-            // We'd like to put a filename with relative path from the auxiliary directory
+            // We'd like to put a filename with relative path from the auxiliary directory (e.g., ["foo.rs", "foo/bar.rs"]).
             let vertex = file_path
                 .strip_prefix(base_dir)
                 .map_err(|e| io::Error::other(e))?
                 .to_str()
-                .unwrap()
-                .to_string();
-            vertices.push(vertex);
+                .unwrap();
+            vertices.push(vertex.to_string());
+
             let mut aux = AuxProps::default();
             let mut poisoned = false;
             let f = File::open(&file_path).expect("open test file to parse aux for cycle detection");
@@ -121,14 +121,13 @@ fn build_graph(config: &Config, dir: &Path, base_dir: &Path, vertices: &mut Vec<
                 },
             );
 
-            let src = file.file_name().into_string().unwrap();
-            let mut dsts = vec![];
-            for dst in aux.all_aux_path_strings() {
-                dsts.push(dst.to_string());
+            let mut edge = vec![];
+            for a in aux.all_aux_path_strings() {
+                edge.push(a.to_string());
             }
 
-            if dsts.len() > 0 {
-                edges.insert(src, dsts);
+            if edge.len() > 0 {
+                edges.insert(vertex.to_string(), edge);
             }
         }
     }
