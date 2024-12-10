@@ -71,11 +71,14 @@ fn parse_aux_crate(r: String) -> (String, String) {
     )
 }
 
+/// Return an error if the given directory has cyclic aux.
 pub(crate) fn check_cycles(config: &Config, dir: &Path) -> io::Result<()> {
+    // vertices keeps filenames in the given dir.
     let mut vertices = vec![];
+    // edges keeps filenames (key) and their auxiliary files (value).
     let mut edges= HashMap::new();
 
-    build_graph(config, dir, &mut vertices, &mut edges)?;
+    build_graph(config, dir, dir, &mut vertices, &mut edges)?;
 
     if edges.len() > 0 {
         println!("====================================");
@@ -88,15 +91,22 @@ pub(crate) fn check_cycles(config: &Config, dir: &Path) -> io::Result<()> {
     has_cycle(&vertices, &edges)
 }
 
-fn build_graph(config: &Config, dir: &Path, vertices: &mut Vec<String>, edges: &mut HashMap<String, Vec<String>>) -> io::Result<()> {
+fn build_graph(config: &Config, dir: &Path, base_dir: &Path, vertices: &mut Vec<String>, edges: &mut HashMap<String, Vec<String>>) -> io::Result<()> {
     for file in fs::read_dir(dir)? {
         let file = file?;
         let file_path = file.path();
 
         if file_path.is_dir() {
-            build_graph(config, &file_path, vertices, edges)?;
+            build_graph(config, &file_path, base_dir, vertices, edges)?;
         } else {
-            vertices.push(file.file_name().into_string().unwrap());
+            // We'd like to put a filename with relative path from the auxiliary directory
+            let vertex = file_path
+                .strip_prefix(base_dir)
+                .map_err(|e| io::Error::other(e))?
+                .to_str()
+                .unwrap()
+                .to_string();
+            vertices.push(vertex);
             let mut aux = AuxProps::default();
             let mut poisoned = false;
             let f = File::open(&file_path).expect("open test file to parse aux for cycle detection");
@@ -111,14 +121,14 @@ fn build_graph(config: &Config, dir: &Path, vertices: &mut Vec<String>, edges: &
                 },
             );
 
-            let s = file.file_name().into_string().unwrap();
-            let mut v = vec![];
-            for to in aux.all_aux_path_strings() {
-                v.push(to.to_string());
+            let src = file.file_name().into_string().unwrap();
+            let mut dsts = vec![];
+            for dst in aux.all_aux_path_strings() {
+                dsts.push(dst.to_string());
             }
 
-            if v.len() > 0 {
-                edges.insert(s, v);
+            if dsts.len() > 0 {
+                edges.insert(src, dsts);
             }
         }
     }
@@ -126,9 +136,16 @@ fn build_graph(config: &Config, dir: &Path, vertices: &mut Vec<String>, edges: &
     Ok(())
 }
 
+/// has_cycle checks if the given graph has cycle.
+/// It performs with a simple Depth-first search.
 fn has_cycle(vertices: &Vec<String>, edges: &HashMap<String, Vec<String>>) -> io::Result<()> {
+    // checked tracks nodes which the function finishes search on.
     let mut checked = HashSet::with_capacity(vertices.len());
+    // During one DFS exploration, on_search tracks visited nodes.
+    // If the current node is already in on_search, that's a cycle.
     let mut on_search = HashSet::with_capacity(4);
+    // path tracks visited nodes in on exploration.
+    // This is used for an error message.
     let mut path = Vec::new();
 
     for vertex in vertices.iter() {
@@ -151,13 +168,10 @@ fn has_cycle(vertices: &Vec<String>, edges: &HashMap<String, Vec<String>>) -> io
                 if v == vertex {
                     break;
                 }
-
                 cyclic_path.push(v);
             }
 
-            return Err(io::Error::other(
-                format!("detect cyclic aux: {:?}", cyclic_path),
-            ));
+            return Err(io::Error::other(format!("detect cyclic aux: {:?}", cyclic_path)));
         }
 
         if checked.insert(vertex.to_string()) {
@@ -169,8 +183,7 @@ fn has_cycle(vertices: &Vec<String>, edges: &HashMap<String, Vec<String>>) -> io
             }
         }
 
-        on_search.remove(&vertex.to_string());
-        
+        on_search.remove(&vertex.to_string());        
         Ok(())
     }
 
