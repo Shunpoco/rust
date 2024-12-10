@@ -136,10 +136,11 @@ fn build_graph(config: &Config, dir: &Path, vertices: &mut Vec<String>, edges: &
 fn has_cycle(vertices: &Vec<String>, edges: &HashMap<String, Vec<String>>) -> bool {
     let mut checked = HashSet::with_capacity(vertices.len());
     let mut on_search = HashSet::with_capacity(4);
+    let mut path = Vec::new();
 
-    for v in vertices.iter() {
-        if !checked.contains(v) {
-            if search(vertices, edges, &v, &mut checked, &mut on_search) {
+    for vertex in vertices.iter() {
+        if !checked.contains(vertex) {
+            if search(vertices, edges, &vertex, &mut checked, &mut on_search, &mut path) {
                 return true;
             }
         }
@@ -151,16 +152,28 @@ fn has_cycle(vertices: &Vec<String>, edges: &HashMap<String, Vec<String>>) -> bo
         vertex: &str,
         checked: &mut HashSet<String>,
         on_search: &mut HashSet<String>,
+        path: &mut Vec<String>,
     ) -> bool {
         if !on_search.insert(vertex.to_string()) {
-            println!("detect!!!!!!!! 1 {}, {:?} {:?}", vertex, vertices, edges);
+            let mut cyclic_path = vec![vertex];
+            for v in path.iter().rev() {
+                if v == vertex {
+                    break;
+                }
+
+                cyclic_path.push(v);
+            }
+
+            println!("detect!!!!!!!! 1 {:?}", cyclic_path);
+
             return true;
         }
 
         if checked.insert(vertex.to_string()) {
+            path.push(vertex.to_string());
             if let Some(e) = edges.get(&vertex.to_string()) {
                 for to in e.iter() {
-                    if search(vertices, edges, &to, checked, on_search) {
+                    if search(vertices, edges, &to, checked, on_search, path) {
                         println!("detect!!!!!!!!!2 {}, {:?} {:?}", vertex, vertices, edges);
                         return true;
                     }
@@ -171,7 +184,6 @@ fn has_cycle(vertices: &Vec<String>, edges: &HashMap<String, Vec<String>>) -> bo
         on_search.remove(&vertex.to_string());
         false
     }
-
 
     false
 }
