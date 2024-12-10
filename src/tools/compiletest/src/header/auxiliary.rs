@@ -99,12 +99,12 @@ fn build_graph(config: &Config, dir: &Path, vertices: &mut Vec<String>, edges: &
             vertices.push(file.file_name().into_string().unwrap());
             let mut aux = AuxProps::default();
             let mut poisoned = false;
-            let f = File::open(file_path).expect("open test file to parse aux for cycle detection");
+            let f = File::open(&file_path).expect("open test file to parse aux for cycle detection");
             iter_header(
                 config.mode,
                 &config.suite,
                 &mut poisoned,
-                &file.path(),
+                &file_path,
                 f,
                 &mut |DirectiveLine { raw_directive: ln, .. }| {
                     parse_and_update_aux(config, ln, &mut aux);
