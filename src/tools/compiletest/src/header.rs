@@ -50,7 +50,7 @@ impl EarlyProps {
     }
 
     pub fn from_reader<R: Read>(config: &Config, testfile: &Path, rdr: R) -> Self {
-        println!("EarlyProps.from_reader");
+        // println!("EarlyProps.from_reader");
         let mut props = EarlyProps::default();
         let mut poisoned = false;
         iter_header(

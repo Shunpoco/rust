@@ -1,10 +1,16 @@
 //! Code for dealing with test directives that request an "auxiliary" crate to
 //! be built and made available to the test in some way.
 
-use std::iter;
+use std::collections::HashSet;
+use std::fs::File;
+use std::{fs, io, iter};
+use std::path::Path;
 
 use crate::common::Config;
 use crate::header::directives::{AUX_BIN, AUX_BUILD, AUX_CODEGEN_BACKEND, AUX_CRATE, PROC_MACRO};
+use crate::header::DirectiveLine;
+
+use super::iter_header;
 
 /// Properties parsed from `aux-*` test directives.
 #[derive(Clone, Debug, Default)]
@@ -42,7 +48,7 @@ impl AuxProps {
 /// If the given test directive line contains an `aux-*` directive, parse it
 /// and update [`AuxProps`] accordingly.
 pub(super) fn parse_and_update_aux(config: &Config, ln: &str, aux: &mut AuxProps) {
-    println!("parse_and_update_aux");
+    // println!("parse_and_update_aux");
     if !(ln.starts_with("aux-") || ln.starts_with("proc-macro")) {
         return;
     }
@@ -63,4 +69,108 @@ fn parse_aux_crate(r: String) -> (String, String) {
         parts.next().expect("missing aux-crate name (e.g. log=log.rs)").to_string(),
         parts.next().expect("missing aux-crate value (e.g. log=log.rs)").to_string(),
     )
+}
+
+pub(crate) fn check_cycles(config: &Config, dir: &Path) -> bool {
+    let mut vertices = vec![];
+    let mut edges= vec![];
+
+    match build_graph(config, dir, &mut vertices, &mut edges) {
+        Ok(_) => {},
+        Err(_) => panic!(""),
+    };
+
+    if edges.len() > 0 {
+        println!("====================================");
+        println!("{:?}", dir);
+        println!("{:?}", vertices);
+        println!("{:?}", edges);
+        println!("====================================");    
+    }
+
+    has_cycle(&vertices, &edges)
+}
+
+fn build_graph(config: &Config, dir: &Path, vertices: &mut Vec<String>, edges: &mut Vec<(String, String)>) -> io::Result<()> {
+    for file in fs::read_dir(dir)? {
+        let file = file?;
+        let file_path = file.path();
+
+
+        if file_path.is_dir() {
+            match build_graph(config, &file_path, vertices, edges) {
+                Ok(_) => {},
+                Err(_) => panic!(""),
+            };
+        } else {
+            vertices.push(file.file_name().into_string().unwrap());
+            let mut aux = AuxProps::default();
+            let mut poisoned = false;
+            let f = File::open(file_path).expect("open test file to parse earlyprops");
+            iter_header(
+                config.mode,
+                &config.suite,
+                &mut poisoned,
+                &file.path(),
+                f,
+                &mut |DirectiveLine { raw_directive: ln, .. }| {
+                    parse_and_update_aux(config, ln, &mut aux);
+                },
+            );
+
+            for v in aux.all_aux_path_strings() {
+                edges.push((
+                    file.file_name().into_string().unwrap(),
+                    v.to_string(),
+                ));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn has_cycle(vertices: &Vec<String>, edges: &Vec<(String, String)>) -> bool {
+    let mut checked = HashSet::with_capacity(vertices.len());
+    let mut on_search = HashSet::with_capacity(4);
+
+    for v in vertices.iter() {
+        if !checked.contains(v) {
+            if search(vertices, edges, &v, &mut checked, &mut on_search) {
+                return true;
+            }
+        }
+    }
+
+    fn search(
+        vertices: &Vec<String>,
+        edges: &Vec<(String, String)>,
+        vertex: &str,
+        checked: &mut HashSet<String>,
+        on_search: &mut HashSet<String>,
+    ) -> bool {
+        if !on_search.insert(vertex.to_string()) {
+            println!("detect!!!!!!!! 1 {}, {:?} {:?}", vertex, vertices, edges);
+            return true;
+        }
+
+        if checked.insert(vertex.to_string()) {
+            for (from, to) in edges.iter() {
+                if vertex != from {
+                    continue;
+                }
+
+                if search(vertices, edges, &to, checked, on_search) {
+                    println!("detect!!!!!!!!!2 {}, {:?} {:?}", vertex, vertices, edges);
+                    return true;
+                }
+            }
+        }
+
+        on_search.remove(&vertex.to_string());
+        false
+    }
+
+
+    false
 }

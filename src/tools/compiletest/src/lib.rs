@@ -42,6 +42,7 @@ use crate::common::{
 };
 use crate::header::HeadersCache;
 use crate::util::logv;
+use crate::header::auxiliary::check_cycles;
 
 /// Creates the `Config` instance for this invocation of compiletest.
 ///
@@ -735,7 +736,7 @@ fn collect_tests_from_dir(
     // subdirectories we find, except for `auxiliary` directories.
     // FIXME: this walks full tests tree, even if we have something to ignore
     // use walkdir/ignore like in tidy?
-    println!("in collect_tests_from_dir: outside of the loop");
+    println!("in collect_tests_from_dir: outside of the loop: {:?}", dir);
     for file in fs::read_dir(dir)? {
         let file = file?;
         let file_path = file.path();
@@ -746,7 +747,7 @@ fn collect_tests_from_dir(
         {
             // We found a test file, so create the corresponding libtest structures.
             debug!("found test file: {:?}", file_path.display());
-            println!("{:?}", file_path.display());
+            // println!("{:?}", file_path.display());
 
             // Record the stem of the test file, to check for overlaps later.
             let rel_test_path = relative_dir_path.join(file_path.file_stem().unwrap());
@@ -754,7 +755,7 @@ fn collect_tests_from_dir(
 
             let paths =
                 TestPaths { file: file_path, relative_dir: relative_dir_path.to_path_buf() };
-            println!("in collect_tests_from_dir");
+            // println!("in collect_tests_from_dir");
             make_test(cx, collector, &paths);
         } else if file_path.is_dir() {
             // Recurse to find more tests in a subdirectory.
@@ -762,6 +763,10 @@ fn collect_tests_from_dir(
             if &file_name != "auxiliary" {
                 debug!("found directory: {:?}", file_path.display());
                 collect_tests_from_dir(cx, collector, &file_path, &relative_file_path)?;
+            } else if check_cycles(&cx.config, &file_path) {
+                return Err(io::Error::other(
+                    "detects a cyclic dependencies in auxiliary",
+                ));
             }
         } else {
             debug!("found other file/directory: {:?}", file_path.display());
@@ -805,7 +810,7 @@ fn make_test(cx: &TestCollectorCx, collector: &mut TestCollector, testpaths: &Te
         PathBuf::from(&testpaths.file)
     };
 
-    println!("in make_test");
+    // println!("in make_test");
     // Scan the test file to discover its revisions, if any.
     let early_props = EarlyProps::from_file(&cx.config, &test_path);
 
