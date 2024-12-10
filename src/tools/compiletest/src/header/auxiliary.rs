@@ -1,7 +1,7 @@
 //! Code for dealing with test directives that request an "auxiliary" crate to
 //! be built and made available to the test in some way.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::{fs, io, iter};
 use std::path::Path;
@@ -73,7 +73,7 @@ fn parse_aux_crate(r: String) -> (String, String) {
 
 pub(crate) fn check_cycles(config: &Config, dir: &Path) -> bool {
     let mut vertices = vec![];
-    let mut edges= vec![];
+    let mut edges= HashMap::new();
 
     match build_graph(config, dir, &mut vertices, &mut edges) {
         Ok(_) => {},
@@ -91,7 +91,7 @@ pub(crate) fn check_cycles(config: &Config, dir: &Path) -> bool {
     has_cycle(&vertices, &edges)
 }
 
-fn build_graph(config: &Config, dir: &Path, vertices: &mut Vec<String>, edges: &mut Vec<(String, String)>) -> io::Result<()> {
+fn build_graph(config: &Config, dir: &Path, vertices: &mut Vec<String>, edges: &mut HashMap<String, Vec<String>>) -> io::Result<()> {
     for file in fs::read_dir(dir)? {
         let file = file?;
         let file_path = file.path();
@@ -118,11 +118,14 @@ fn build_graph(config: &Config, dir: &Path, vertices: &mut Vec<String>, edges: &
                 },
             );
 
-            for v in aux.all_aux_path_strings() {
-                edges.push((
-                    file.file_name().into_string().unwrap(),
-                    v.to_string(),
-                ));
+            let s = file.file_name().into_string().unwrap();
+            let mut v = vec![];
+            for to in aux.all_aux_path_strings() {
+                v.push(to.to_string());
+            }
+
+            if v.len() > 0 {
+                edges.insert(s, v);
             }
         }
     }
@@ -130,7 +133,7 @@ fn build_graph(config: &Config, dir: &Path, vertices: &mut Vec<String>, edges: &
     Ok(())
 }
 
-fn has_cycle(vertices: &Vec<String>, edges: &Vec<(String, String)>) -> bool {
+fn has_cycle(vertices: &Vec<String>, edges: &HashMap<String, Vec<String>>) -> bool {
     let mut checked = HashSet::with_capacity(vertices.len());
     let mut on_search = HashSet::with_capacity(4);
 
@@ -144,7 +147,7 @@ fn has_cycle(vertices: &Vec<String>, edges: &Vec<(String, String)>) -> bool {
 
     fn search(
         vertices: &Vec<String>,
-        edges: &Vec<(String, String)>,
+        edges: &HashMap<String, Vec<String>>,
         vertex: &str,
         checked: &mut HashSet<String>,
         on_search: &mut HashSet<String>,
@@ -155,15 +158,13 @@ fn has_cycle(vertices: &Vec<String>, edges: &Vec<(String, String)>) -> bool {
         }
 
         if checked.insert(vertex.to_string()) {
-            for (from, to) in edges.iter() {
-                if vertex != from {
-                    continue;
-                }
-
-                if search(vertices, edges, &to, checked, on_search) {
-                    println!("detect!!!!!!!!!2 {}, {:?} {:?}", vertex, vertices, edges);
-                    return true;
-                }
+            if let Some(e) = edges.get(&vertex.to_string()) {
+                for to in e.iter() {
+                    if search(vertices, edges, &to, checked, on_search) {
+                        println!("detect!!!!!!!!!2 {}, {:?} {:?}", vertex, vertices, edges);
+                        return true;
+                    }
+                }    
             }
         }
 
