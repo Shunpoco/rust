@@ -162,10 +162,8 @@ fn has_cycle(vertices: &Vec<String>, edges: &HashMap<String, Vec<String>>) -> io
                 cyclic_path.push(v);
             }
 
-            println!("detect!!!!!!!! 1 {:?}", cyclic_path);
-
             return Err(io::Error::other(
-                "detect1",
+                format!("detect cyclic aux: {:?}", cyclic_path),
             ));
         }
 
