@@ -94,10 +94,7 @@ fn build_graph(config: &Config, dir: &Path, vertices: &mut Vec<String>, edges: &
         let file_path = file.path();
 
         if file_path.is_dir() {
-            match build_graph(config, &file_path, vertices, edges) {
-                Ok(_) => {},
-                Err(_) => panic!(""),
-            };
+            build_graph(config, &file_path, vertices, edges)?;
         } else {
             vertices.push(file.file_name().into_string().unwrap());
             let mut aux = AuxProps::default();
