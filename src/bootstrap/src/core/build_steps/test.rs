@@ -1937,8 +1937,22 @@ NOTE: if you're sure you want to do this, please open an issue as to why. In the
         // Get test-args by striping suite path
         let mut test_args: Vec<&str> = paths
             .iter()
-            .filter_map(|p| helpers::is_valid_test_suite_arg(p, suite_path, builder))
+            .map(|p| match p.strip_prefix(".") {
+                Ok(path) => path,
+                Err(_) => p,
+            })
+            .filter(|p| p.starts_with(suite_path))
+            .filter(|p| {
+                let abs_path = builder.src.join(p);
+                let exists = abs_path.is_dir() || abs_path.is_file();
+                if !exists {
+                    panic!("no!!!");
+                }
+                exists
+            })
+            .map(|p| p.to_str().unwrap())
             .collect();
+        println!("test_args = {:?}", test_args);
 
         test_args.append(&mut builder.config.test_args());
 
