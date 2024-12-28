@@ -49,6 +49,7 @@ use crate::util::logv;
 /// some code here that inspects environment variables or even runs executables
 /// (e.g. when discovering debugger versions).
 pub fn parse_config(args: Vec<String>) -> Config {
+    println!("original args = {:?}", args);
     let mut opts = Options::new();
     opts.reqopt("", "compile-lib-path", "path to host shared libraries", "PATH")
         .reqopt("", "run-lib-path", "path to target shared libraries", "PATH")
@@ -193,11 +194,13 @@ pub fn parse_config(args: Vec<String>) -> Config {
         panic!()
     }
 
+    println!("args_ = {:?}", args_);
     let matches = &match opts.parse(args_) {
         Ok(m) => m,
         Err(f) => panic!("{:?}", f),
     };
 
+    println!("matches.free = {:?}", matches.free);
     if matches.opt_present("h") || matches.opt_present("help") {
         let message = format!("Usage: {} [OPTIONS]  [TESTNAME...]", argv0);
         println!("{}", opts.usage(&message));
@@ -491,7 +494,7 @@ pub fn run_tests(config: Arc<Config>) {
     }
 
     tests.sort_by(|a, b| a.desc.name.as_slice().cmp(&b.desc.name.as_slice()));
-
+    println!("filter = {:?}", opts.filters);
     // Delegate to libtest to filter and run the big list of structures created
     // during test discovery. When libtest decides to run a test, it will invoke
     // the corresponding closure created by `make_test_closure`.
@@ -707,7 +710,8 @@ fn collect_tests_from_dir(
     if dir.join("compiletest-ignore-dir").exists() {
         return Ok(());
     }
-
+    println!("{:?}", dir);
+    println!("=========");
     // For run-make tests, a "test file" is actually a directory that contains
     // an `rmake.rs` or `Makefile`"
     if cx.config.mode == Mode::RunMake {

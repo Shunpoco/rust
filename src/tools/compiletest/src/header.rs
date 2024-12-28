@@ -1392,6 +1392,7 @@ pub fn make_test_description<R: Read>(
         _ => test::ShouldPanic::No,
     };
 
+    println!("test.desc.name = {}", name);
     test::TestDesc {
         name,
         ignore,
