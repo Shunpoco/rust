@@ -521,7 +521,9 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         arm_match_scope: Option<(&Arm<'tcx>, region::Scope)>,
         emit_storage_live: EmitStorageLive,
     ) -> BasicBlock {
+        println!("bind_pattern!!!!");
         if branch.sub_branches.len() == 1 {
+            println!("1");
             let [sub_branch] = branch.sub_branches.try_into().unwrap();
             // Avoid generating another `BasicBlock` when we only have one sub branch.
             self.bind_and_guard_matched_candidate(
@@ -533,6 +535,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 emit_storage_live,
             )
         } else {
+            println!("else");
             // It's helpful to avoid scheduling drops multiple times to save
             // drop elaboration from having to clean up the extra drops.
             //
@@ -1427,6 +1430,9 @@ impl<'tcx> MatchTreeSubBranch<'tcx> {
         parent_data: &Vec<PatternExtraData<'tcx>>,
     ) -> Self {
         debug_assert!(candidate.match_pairs.is_empty());
+        println!("subsub");
+        println!("{:?}", candidate.match_pairs.is_empty());
+        println!("{:?}", candidate);
         MatchTreeSubBranch {
             span: candidate.extra_data.span,
             success_block: candidate.pre_binding_block.unwrap(),
@@ -1508,19 +1514,26 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             })
             .collect();
 
+        println!("candidates dayo");
+        println!("{:?}", candidates);
+
         let fake_borrow_temps = util::collect_fake_borrows(
             self,
             &candidates,
             scrutinee_span,
             scrutinee_place_builder.base(),
         );
-
+        println!("fake_borrow_temps no ato dayo");
+        println!("{:?}", candidates);
         // This will generate code to test scrutinee_place and branch to the appropriate arm block.
         // If none of the arms match, we branch to `otherwise_block`. When lowering a `match`
         // expression, exhaustiveness checking ensures that this block is unreachable.
         let mut candidate_refs = candidates.iter_mut().collect::<Vec<_>>();
         let otherwise_block =
             self.match_candidates(match_start_span, scrutinee_span, block, &mut candidate_refs);
+        println!("print otherwise_block");
+        println!("{:?}", otherwise_block);
+        println!("{:?}", candidates);
 
         // Set up false edges so that the borrow-checker cannot make use of the specific CFG we
         // generated. We falsely branch from each candidate to the one below it to make it as if we
@@ -1528,6 +1541,9 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         // false edge to the final failure block.
         let mut next_candidate_start_block = if refutable { Some(otherwise_block) } else { None };
         for candidate in candidates.iter_mut().rev() {
+            println!("each candidate...");
+            println!("{:?}", candidate);
+        
             let has_guard = candidate.has_guard;
             candidate.visit_leaves_rev(|leaf_candidate| {
                 if let Some(next_candidate_start_block) = next_candidate_start_block {
@@ -1541,8 +1557,11 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                         next_candidate_start_block,
                         source_info,
                     );
+                    println!("hoge");
                     leaf_candidate.pre_binding_block = Some(new_pre_binding);
-                    if has_guard {
+                    if has_guard && !leaf_candidate.extra_data.is_never {
+                        println!("fuga");
+                        println!("{:?}", leaf_candidate);
                         // Falsely branch to `next_candidate_start_block` also if the guard fails.
                         let new_otherwise = self.cfg.start_new_block();
                         let old_otherwise = leaf_candidate.otherwise_block.unwrap();
@@ -1553,6 +1572,8 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                             source_info,
                         );
                         leaf_candidate.otherwise_block = Some(new_otherwise);
+                        println!("reach!");
+                        println!("{:?}", leaf_candidate);
                     }
                 }
                 assert!(leaf_candidate.false_edge_start_block.is_some());
@@ -1686,13 +1707,19 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             }
         }
 
+        println!("-------");
+        if candidates.len() > 0 {
+            println!("{:?}", candidates[0]);
+        }
         // Process a prefix of the candidates.
         let rest = match candidates {
             [] => {
+                println!("nothing!");
                 // If there are no candidates that still need testing, we're done.
                 return start_block;
             }
             [first, remaining @ ..] if first.match_pairs.is_empty() => {
+                println!("The first pair is empty");
                 // The first candidate has satisfied all its match pairs.
                 // We record the blocks that will be needed by match arm lowering,
                 // and then continue with the remaining candidates.
@@ -1700,6 +1727,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 remainder_start.and(remaining)
             }
             candidates if candidates.iter().any(|candidate| candidate.starts_with_or_pattern()) => {
+                println!("or pattern");
                 // If any candidate starts with an or-pattern, we want to expand or-patterns
                 // before we do any more tests.
                 //
@@ -1710,6 +1738,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 self.expand_and_match_or_candidates(span, scrutinee_span, start_block, candidates)
             }
             candidates => {
+                println!("else");
                 // The first candidate has some unsatisfied match pairs; we proceed to do more tests.
                 self.test_candidates(span, scrutinee_span, candidates, start_block)
             }
@@ -1759,6 +1788,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         // Create the otherwise block for this candidate, which is the
         // pre-binding block for the next candidate.
         candidate.otherwise_block = Some(otherwise_block);
+        println!("{:?}", candidate);
         otherwise_block
     }
 
@@ -1833,12 +1863,14 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
         // Recursively lower the part of the match tree represented by the
         // expanded candidates. This is where subcandidates actually get lowered!
+        println!("match!");
         let remainder_start = self.match_candidates(
             span,
             scrutinee_span,
             start_block,
             expanded_candidates.as_mut_slice(),
         );
+        println!("{:?}", expanded_candidates[0]);
 
         // Postprocess subcandidates, and process any leftover match pairs.
         // (Only the last candidate can possibly have more match pairs.)
@@ -1846,10 +1878,16 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             let mut all_except_last = candidates_to_expand.iter().rev().skip(1);
             all_except_last.all(|candidate| candidate.match_pairs.is_empty())
         });
+        println!("iter!");
         for candidate in candidates_to_expand.iter_mut() {
+            println!("{:?}", candidate);
             if !candidate.subcandidates.is_empty() {
+                println!("merge-suruyo!");
                 self.merge_trivial_subcandidates(candidate);
+                println!("{:?}", candidate);
+                println!("remove-suruyo!");
                 self.remove_never_subcandidates(candidate);
+                println!("{:?}", candidate);
             }
         }
         // It's important to perform the above simplifications _before_ dealing
@@ -1859,6 +1897,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             self.test_remaining_match_pairs_after_or(span, scrutinee_span, last_candidate);
         }
 
+        println!("modottekitayo");
         remainder_start.and(remaining_candidates)
     }
 
@@ -2001,7 +2040,9 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         });
         if candidate.subcandidates.is_empty() {
             // If `candidate` has become a leaf candidate, ensure it has a `pre_binding_block`.
-            candidate.pre_binding_block = Some(self.cfg.start_new_block());
+            let v = self.cfg.start_new_block();
+            candidate.pre_binding_block = Some(v);
+            // candidate.otherwise_block = Some(v);
         }
     }
 
@@ -2411,6 +2452,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         let block = sub_branch.success_block;
 
         if sub_branch.is_never {
+            println!("koko ni haitta!");
             // This arm has a dummy body, we don't need to generate code for it. `block` is already
             // unreachable (except via false edge).
             let source_info = self.source_info(sub_branch.span);
