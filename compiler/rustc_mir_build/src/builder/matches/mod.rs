@@ -1559,7 +1559,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                     );
                     println!("hoge");
                     leaf_candidate.pre_binding_block = Some(new_pre_binding);
-                    if has_guard && !leaf_candidate.extra_data.is_never {
+                    if has_guard {
                         println!("fuga");
                         println!("{:?}", leaf_candidate);
                         // Falsely branch to `next_candidate_start_block` also if the guard fails.
@@ -1703,6 +1703,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
     ) -> BasicBlock {
         if let [first, ..] = candidates {
             if first.false_edge_start_block.is_none() {
+                println!("naiyo");
                 first.false_edge_start_block = Some(start_block);
             }
         }
@@ -1743,9 +1744,12 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 self.test_candidates(span, scrutinee_span, candidates, start_block)
             }
         };
-
+        println!("tugi dayo");
+        println!("{:?}", start_block);
         // Process any candidates that remain.
         let remaining_candidates = unpack!(start_block = rest);
+        println!("kawatta?");
+        println!("{:?}", start_block);
         self.match_candidates(span, scrutinee_span, start_block, remaining_candidates)
     }
 
@@ -1838,15 +1842,22 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             .unwrap_or(candidates.len()); // Otherwise, include all candidates
         let (candidates_to_expand, remaining_candidates) = candidates.split_at_mut(expand_until);
 
+        println!("{:?}", candidates_to_expand);
+        println!("{:?}", remaining_candidates);
+
         // Expand one level of or-patterns for each candidate in `candidates_to_expand`.
         // We take care to preserve the relative ordering of candidates, so that
         // or-patterns are expanded in their parent's relative position.
         let mut expanded_candidates = Vec::new();
         for candidate in candidates_to_expand.iter_mut() {
+            println!("**********");
+            println!("{:?}", candidate);
+            println!("**********");
             if candidate.starts_with_or_pattern() {
+                println!("starts with or pattern ni haittayo");
                 let or_match_pair = candidate.match_pairs.remove(0);
                 // Expand the or-pattern into subcandidates.
-                self.create_or_subcandidates(candidate, or_match_pair);
+                self.create_or_subcandidates(candidate, or_match_pair, start_block);
                 // Collect the newly created subcandidates.
                 for subcandidate in candidate.subcandidates.iter_mut() {
                     expanded_candidates.push(subcandidate);
@@ -1908,6 +1919,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         &mut self,
         candidate: &mut Candidate<'pat, 'tcx>,
         match_pair: MatchPairTree<'pat, 'tcx>,
+        _start_block: BasicBlock,
     ) {
         let TestCase::Or { pats } = match_pair.test_case else { bug!() };
         debug!("expanding or-pattern: candidate={:#?}\npats={:#?}", candidate, pats);
@@ -1917,7 +1929,14 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             .into_iter()
             .map(|flat_pat| Candidate::from_flat_pat(flat_pat, candidate.has_guard))
             .collect();
+
+        // if candidate.false_edge_start_block.is_none() {
+        //     println!("naiyo");
+        //     candidate.false_edge_start_block = Some(start_block);
+        // }
         candidate.subcandidates[0].false_edge_start_block = candidate.false_edge_start_block;
+        println!("create_or_subcandidates ga owattayo");
+        println!("{:?}", candidate);
     }
 
     /// Try to merge all of the subcandidates of the given candidate into one. This avoids
@@ -1979,6 +1998,10 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
     /// in match tree lowering.
     fn merge_trivial_subcandidates(&mut self, candidate: &mut Candidate<'_, 'tcx>) {
         assert!(!candidate.subcandidates.is_empty());
+        if candidate.false_edge_start_block.is_none() {
+            candidate.false_edge_start_block = candidate.subcandidates[0].false_edge_start_block;
+        }
+
         if candidate.has_guard {
             // FIXME(or_patterns; matthewjasper) Don't give up if we have a guard.
             return;
@@ -1998,9 +2021,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         let or_span = candidate.or_span.take().unwrap();
         let source_info = self.source_info(or_span);
 
-        if candidate.false_edge_start_block.is_none() {
-            candidate.false_edge_start_block = candidate.subcandidates[0].false_edge_start_block;
-        }
 
         // Remove the (known-trivial) subcandidates from the candidate tree,
         // so that they aren't visible after match tree lowering, and wire them
@@ -2042,7 +2062,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             // If `candidate` has become a leaf candidate, ensure it has a `pre_binding_block`.
             let v = self.cfg.start_new_block();
             candidate.pre_binding_block = Some(v);
-            // candidate.otherwise_block = Some(v);
+            candidate.otherwise_block = Some(v);
         }
     }
 
