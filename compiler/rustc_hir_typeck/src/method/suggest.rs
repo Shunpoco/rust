@@ -4109,7 +4109,9 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         }
         let trait_def_id = self.tcx.parent(item_def_id);
         let krate = self.tcx.crate_name(trait_def_id.krate);
+        println!("kokokokokokokoko1");
         let name = self.tcx.item_name(trait_def_id);
+        println!("kokokokokokokoko2");
         let candidates: Vec<_> = traits
             .iter()
             .filter(|c| {
