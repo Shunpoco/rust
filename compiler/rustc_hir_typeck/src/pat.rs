@@ -311,7 +311,14 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
     #[instrument(level = "debug", skip(self, pat_info))]
     fn check_pat(&self, pat: &'tcx Pat<'tcx>, expected: Ty<'tcx>, pat_info: PatInfo<'_, 'tcx>) {
         let PatInfo { binding_mode, max_ref_mutbl, top_info: ti, current_depth, .. } = pat_info;
-
+        println!("1111111");
+        println!("{:?}", expected);
+        println!("{:?}", binding_mode);
+        println!("{:?}", max_ref_mutbl);
+        println!("{:?}", pat);
+        println!("{:?}", pat.kind);
+        println!("{}", current_depth);
+        println!("----------");
         let path_res = match &pat.kind {
             PatKind::Path(qpath) => {
                 Some(self.resolve_ty_and_res_fully_qualified_call(qpath, pat.hir_id, pat.span))
@@ -328,6 +335,16 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             decl_origin: pat_info.decl_origin,
             current_depth: current_depth + 1,
         };
+        println!("222222");
+        println!("{:?}", expected);
+        println!("{:?}", *expected.kind());
+        println!("{:?}", binding_mode);
+        println!("{:?}", max_ref_mutbl);
+        println!("{:?}", pat);
+        println!("{:?}", pat.kind);
+        println!("{}", current_depth);
+        println!("{:?}", pat_info.binding_mode);
+        println!("----------");
 
         let ty = match pat.kind {
             PatKind::Wild | PatKind::Err(_) => expected,
@@ -424,10 +441,12 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         adjust_mode: AdjustMode,
         max_ref_mutbl: MutblCap,
     ) -> (Ty<'tcx>, ByRef, MutblCap) {
-        #[cfg(debug_assertions)]
-        if def_br == ByRef::Yes(Mutability::Mut) && max_ref_mutbl != MutblCap::Mut {
-            span_bug!(pat.span, "Pattern mutability cap violated!");
-        }
+        // #[cfg(debug_assertions)]
+        // if def_br == ByRef::Yes(Mutability::Mut) && max_ref_mutbl != MutblCap::Mut {
+        //     span_bug!(pat.span, "Pattern mutability cap violated!");
+        // }
+        println!("adjust_mode");
+        println!("{:?}", adjust_mode);
         match adjust_mode {
             AdjustMode::Pass => (expected, def_br, max_ref_mutbl),
             AdjustMode::Reset => (expected, ByRef::No, MutblCap::Mut),
@@ -516,8 +535,10 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         //
         // See the examples in `ui/match-defbm*.rs`.
         let mut pat_adjustments = vec![];
+        println!("peel dayo~");
         while let ty::Ref(_, inner_ty, inner_mutability) = *expected.kind() {
             debug!("inspecting {:?}", expected);
+            println!("{:?}", expected);
 
             debug!("current discriminant is Ref, inserting implicit deref");
             // Preserve the reference type. We'll need it later during THIR lowering.
@@ -534,12 +555,14 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 // This is because a `& &mut` cannot mutate the underlying value.
                 ByRef::Yes(Mutability::Not) => Mutability::Not,
             });
+            println!("{:?}", def_br);
         }
 
         if self.downgrade_mut_inside_shared() {
             def_br = def_br.cap_ref_mutability(max_ref_mutbl.as_mutbl());
         }
         if def_br == ByRef::Yes(Mutability::Not) {
+            println!("Not!!");
             max_ref_mutbl = MutblCap::Not;
         }
 
@@ -786,6 +809,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         expected: Ty<'tcx>,
         pat_info: PatInfo<'_, 'tcx>,
     ) -> Ty<'tcx> {
+        println!("check_pat_ident");
         let PatInfo { binding_mode: def_br, top_info: ti, .. } = pat_info;
 
         // Determine the binding mode...
@@ -837,6 +861,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         if bm.0 == ByRef::Yes(Mutability::Mut)
             && let MutblCap::WeaklyNot(and_pat_span) = pat_info.max_ref_mutbl
         {
+            println!("E509dayo");
             let mut err = struct_span_code_err!(
                 self.dcx(),
                 ident.span,
@@ -1318,9 +1343,14 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         expected: Ty<'tcx>,
         pat_info: PatInfo<'_, 'tcx>,
     ) -> Ty<'tcx> {
+        println!("check_pat_tuple_struct");
         let tcx = self.tcx;
         let on_error = |e| {
             for pat in subpats {
+                println!("koko!");
+                println!("{:?}", pat);
+                println!("{:?}", pat_info.binding_mode);
+                println!("-----------");
                 self.check_pat(pat, Ty::new_error(tcx, e), pat_info);
             }
         };
@@ -1376,6 +1406,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             let ty::Adt(_, args) = pat_ty.kind() else {
                 bug!("unexpected pattern type {:?}", pat_ty);
             };
+            println!("hogehoge~");
             for (i, subpat) in subpats.iter().enumerate_and_adjust(variant.fields.len(), ddpos) {
                 let field = &variant.fields[FieldIdx::from_usize(i)];
                 let field_ty = self.field_ty(subpat.span, field, args);
@@ -2283,18 +2314,23 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
     // Precondition: Pat is Ref(inner)
     fn check_pat_ref(
         &self,
-        pat: &'tcx Pat<'tcx>,
-        inner: &'tcx Pat<'tcx>,
-        pat_mutbl: Mutability,
-        mut expected: Ty<'tcx>,
-        mut pat_info: PatInfo<'_, 'tcx>,
+        pat: &'tcx Pat<'tcx>, // parent
+        inner: &'tcx Pat<'tcx>, // child
+        pat_mutbl: Mutability, // child
+        mut expected: Ty<'tcx>, // parent?
+        mut pat_info: PatInfo<'_, 'tcx>, // parent
     ) -> Ty<'tcx> {
+        println!("check_pat_ref");
+        println!("{:?}", pat_info.binding_mode);
+        println!("{:?}", pat_mutbl);
+        println!("{:?}", *expected.kind());
         let tcx = self.tcx;
 
         let pat_prefix_span =
             inner.span.find_ancestor_inside(pat.span).map(|end| pat.span.until(end));
 
         let ref_pat_matches_mut_ref = self.ref_pat_matches_mut_ref();
+        println!("{}", ref_pat_matches_mut_ref);
         if ref_pat_matches_mut_ref && pat_mutbl == Mutability::Not {
             // If `&` patterns can match against mutable reference types (RFC 3627, Rule 5), we need
             // to prevent subpatterns from binding with `ref mut`. Subpatterns of a shared reference
@@ -2304,11 +2340,14 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         }
 
         expected = self.try_structurally_resolve_type(pat.span, expected);
+        println!("{:?}", expected);
+        println!("{:?}", *expected.kind());
         // Determine whether we're consuming an inherited reference and resetting the default
         // binding mode, based on edition and enabled experimental features.
         if let ByRef::Yes(inh_mut) = pat_info.binding_mode {
             match self.ref_pat_matches_inherited_ref(pat.span.edition()) {
                 InheritedRefMatchRule::EatOuter => {
+                    println!("EatOuter!");
                     // ref pattern attempts to consume inherited reference
                     if pat_mutbl > inh_mut {
                         // Tried to match inherited `ref` with `&mut`
@@ -2340,6 +2379,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     return expected;
                 }
                 InheritedRefMatchRule::EatInner => {
+                    println!("EatInner!");
                     if let ty::Ref(_, _, r_mutbl) = *expected.kind() {
                         // Match against the reference type; don't consume the inherited ref.
                         pat_info.binding_mode = pat_info.binding_mode.cap_ref_mutability(r_mutbl);
@@ -2365,6 +2405,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     }
                 }
                 InheritedRefMatchRule::EatBoth => {
+                    println!("EatBoth!");
                     // Reset binding mode on old editions
                     pat_info.binding_mode = ByRef::No;
                     self.add_rust_2024_migration_desugared_pat(
@@ -2385,13 +2426,17 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 // Take region, inner-type from expected type if we can,
                 // to avoid creating needless variables. This also helps with
                 // the bad interactions of the given hack detailed in (note_1).
+                println!("aaaaa");
+                println!("{:?}", *expected.kind());
                 debug!("check_pat_ref: expected={:?}", expected);
                 match *expected.kind() {
                     ty::Ref(_, r_ty, r_mutbl)
                         if (ref_pat_matches_mut_ref && r_mutbl >= pat_mutbl)
                             || r_mutbl == pat_mutbl =>
                     {
+                        println!("1");
                         if r_mutbl == Mutability::Not {
+                            println!("11Not");
                             pat_info.max_ref_mutbl = MutblCap::Not;
                         }
 
@@ -2399,6 +2444,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     }
 
                     _ => {
+                        println!("2");
                         let inner_ty = self.next_ty_var(inner.span);
                         let ref_ty = self.new_ref_ty(pat.span, pat_mutbl, inner_ty);
                         debug!("check_pat_ref: demanding {:?} = {:?}", expected, ref_ty);
