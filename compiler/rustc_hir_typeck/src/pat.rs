@@ -311,7 +311,15 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
     #[instrument(level = "debug", skip(self, pat_info))]
     fn check_pat(&self, pat: &'tcx Pat<'tcx>, expected: Ty<'tcx>, pat_info: PatInfo<'_, 'tcx>) {
         let PatInfo { binding_mode, max_ref_mutbl, top_info: ti, current_depth, .. } = pat_info;
-
+        // なんでか、max_ref_mutblのアサインがnullになってしまう（gdb上）. Printすると違うのか？
+        // printしてみる
+        // うーーん、プリントするとちゃんと出てそう. GDBも万能じゃないってことだね？？
+        // Mut
+        // Not
+        // Not
+        // Not
+        // 4回呼ばれている
+        println!("{:?}", max_ref_mutbl);
         let path_res = match &pat.kind {
             PatKind::Path(qpath) => {
                 Some(self.resolve_ty_and_res_fully_qualified_call(qpath, pat.hir_id, pat.span))
@@ -2296,6 +2304,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
 
         let ref_pat_matches_mut_ref = self.ref_pat_matches_mut_ref();
         if ref_pat_matches_mut_ref && pat_mutbl == Mutability::Not {
+            println!("True");
             // If `&` patterns can match against mutable reference types (RFC 3627, Rule 5), we need
             // to prevent subpatterns from binding with `ref mut`. Subpatterns of a shared reference
             // pattern should have read-only access to the scrutinee, and the borrow checker won't
@@ -2391,7 +2400,9 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                         if (ref_pat_matches_mut_ref && r_mutbl >= pat_mutbl)
                             || r_mutbl == pat_mutbl =>
                     {
-                        if r_mutbl == Mutability::Not {
+                        println!("1");
+                        if ref_pat_matches_mut_ref && r_mutbl == Mutability::Not {
+                            println!("111Not");
                             pat_info.max_ref_mutbl = MutblCap::Not;
                         }
 
