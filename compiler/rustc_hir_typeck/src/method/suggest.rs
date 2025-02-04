@@ -587,6 +587,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         expected: Expectation<'tcx>,
         trait_missing_method: bool,
     ) -> ErrorGuaranteed {
+        println!("report_no_match_method_error");
         let mode = no_match_data.mode;
         let tcx = self.tcx;
         let rcvr_ty = self.resolve_vars_if_possible(rcvr_ty);
@@ -3444,6 +3445,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         return_type: Option<Ty<'tcx>>,
         trait_missing_method: bool,
     ) {
+        println!("suggest_traits_to_import");
         let mut alt_rcvr_sugg = false;
         let mut trait_in_other_version_found = false;
         if let (SelfSource::MethodCall(rcvr), false) = (source, unsatisfied_bounds) {
@@ -3490,6 +3492,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                         if skippable.contains(&did) {
                             continue;
                         }
+                        println!("first");
                         trait_in_other_version_found = self
                             .detect_and_explain_multiple_crate_versions(
                                 err,
@@ -3697,6 +3700,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             // `Trait` that is imported directly, but `Type` came from a different version of the
             // same crate.
 
+            println!("second");
             let rcvr_ty = self.node_ty_opt(ty.hir_id);
             trait_in_other_version_found = self.detect_and_explain_multiple_crate_versions(
                 err,

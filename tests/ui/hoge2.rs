@@ -1,6 +1,6 @@
 struct A;
 impl A {
-    fn len(self: &B) {}
+    fn len(self: &&B) {}
 }
 
 fn main() {
