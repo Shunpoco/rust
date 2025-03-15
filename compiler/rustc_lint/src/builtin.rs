@@ -152,6 +152,8 @@ declare_lint_pass!(NonShorthandFieldPatterns => [NON_SHORTHAND_FIELD_PATTERNS]);
 impl<'tcx> LateLintPass<'tcx> for NonShorthandFieldPatterns {
     fn check_pat(&mut self, cx: &LateContext<'_>, pat: &hir::Pat<'_>) {
         if let PatKind::Struct(ref qpath, field_pats, _) = pat.kind {
+            println!("builtin.rs");
+            println!("{:?}", pat);
             let variant = cx
                 .typeck_results()
                 .pat_ty(pat)

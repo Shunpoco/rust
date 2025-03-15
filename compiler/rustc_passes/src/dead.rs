@@ -227,9 +227,15 @@ impl<'tcx> MarkSymbolVisitor<'tcx> {
         res: Res,
         pats: &[hir::PatField<'_>],
     ) {
+        // println!("{:?}", lhs.hir_id);
         let variant = match self.typeck_results().node_type(lhs.hir_id).kind() {
             ty::Adt(adt, _) => adt.variant_of_res(res),
-            _ => span_bug!(lhs.span, "non-ADT in struct pattern"),
+            o => {
+                println!("{:?}", o);
+                // span_bug!(lhs.span, "non-ADT in struct pattern");
+                self.tcx.dcx().span_delayed_bug(lhs.span, "non-ADT in struct pattern");
+                return;
+            },
         };
         for pat in pats {
             if let PatKind::Wild = pat.pat.kind {
@@ -631,9 +637,12 @@ impl<'tcx> Visitor<'tcx> for MarkSymbolVisitor<'tcx> {
 
     fn visit_pat(&mut self, pat: &'tcx hir::Pat<'tcx>) {
         self.in_pat = true;
+        println!("{:?}", pat);
         match pat.kind {
             PatKind::Struct(ref path, fields, _) => {
                 let res = self.typeck_results().qpath_res(path, pat.hir_id);
+                // println!("{:?}", res);
+                // println!("{:?}", fields);
                 self.handle_field_pattern_match(pat, res, fields);
             }
             PatKind::TupleStruct(ref qpath, fields, dotdot) => {

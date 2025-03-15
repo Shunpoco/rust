@@ -549,6 +549,9 @@ impl<'tcx> interpret::Machine<'tcx> for CompileTimeMachine<'tcx> {
                     .0
                     .is_error();
                 let span = ecx.cur_span();
+                println!("const eval counter");
+                println!("{:?}", hir_id);
+                println!("{:?}", span);
                 ecx.tcx.emit_node_span_lint(
                     rustc_session::lint::builtin::LONG_RUNNING_CONST_EVAL,
                     hir_id,
@@ -557,12 +560,14 @@ impl<'tcx> interpret::Machine<'tcx> for CompileTimeMachine<'tcx> {
                 );
                 // If this was a hard error, don't bother continuing evaluation.
                 if is_error {
+                    println!("is_error");
                     let guard = ecx
                         .tcx
                         .dcx()
                         .span_delayed_bug(span, "The deny lint should have already errored");
                     throw_inval!(AlreadyReported(ReportedErrorInfo::allowed_in_infallible(guard)));
                 }
+                println!("-----");
             } else if new_steps > start && new_steps.is_power_of_two() {
                 // Only report after a certain number of terminators have been evaluated and the
                 // current number of evaluated terminators is a power of 2. The latter gives us a cheap
