@@ -1191,8 +1191,6 @@ fn analysis(tcx: TyCtxt<'_>, (): ()) -> Result<(), ErrorGuaranteed> {
     });
 
     if let Some(guar) = sess.dcx().has_errors() {
-        println!("koko");
-
         return Err(guar);
     }
 
