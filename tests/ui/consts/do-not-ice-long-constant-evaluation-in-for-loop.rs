@@ -1,4 +1,4 @@
-// The test confirm ICE-125323 is fixed.
+// The test confirms ICE-125323 is fixed.
 //
 // This warning makes sure the fix doesn't throw everything with errors to dead.
 #![warn(unused)]
