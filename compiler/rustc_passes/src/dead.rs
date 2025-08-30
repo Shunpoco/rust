@@ -1172,12 +1172,9 @@ impl<'tcx> DeadVisitor<'tcx> {
 }
 
 fn check_mod_deathness(tcx: TyCtxt<'_>, module: LocalModDefId) {
-//  -> Result<(), ErrorGuaranteed>{
-    let (live_symbols, ignored_derived_traits, r) = tcx.live_symbols_and_ignored_derived_traits(());
-    if r.is_err() {
+    let (live_symbols, ignored_derived_traits, result) = tcx.live_symbols_and_ignored_derived_traits(());
+    if result.is_err() {
         return;
-        // #[allow(deprecated)]
-        // return Err(ErrorGuaranteed::unchecked_error_guaranteed());
     }
     let mut visitor = DeadVisitor { tcx, live_symbols, ignored_derived_traits };
 
