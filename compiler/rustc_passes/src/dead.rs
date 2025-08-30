@@ -1176,9 +1176,12 @@ impl<'tcx> DeadVisitor<'tcx> {
 }
 
 fn check_mod_deathness(tcx: TyCtxt<'_>, module: LocalModDefId) {
+//  -> Result<(), ErrorGuaranteed>{
     let (live_symbols, ignored_derived_traits, success) = tcx.live_symbols_and_ignored_derived_traits(());
     if *success == -1 {
-        println!("hoge!");
+        return;
+        // #[allow(deprecated)]
+        // return Err(ErrorGuaranteed::unchecked_error_guaranteed());
     }
     let mut visitor = DeadVisitor { tcx, live_symbols, ignored_derived_traits };
 
@@ -1266,6 +1269,8 @@ fn check_mod_deathness(tcx: TyCtxt<'_>, module: LocalModDefId) {
     for foreign_item in module_items.foreign_items() {
         visitor.check_definition(foreign_item.owner_id.def_id);
     }
+
+    // Ok(())
 }
 
 pub(crate) fn provide(providers: &mut Providers) {
