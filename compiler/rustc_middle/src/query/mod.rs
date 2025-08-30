@@ -396,7 +396,7 @@ rustc_queries! {
     }
 
     /// The root query triggering all analysis passes like typeck or borrowck.
-    query analysis(key: ()) {
+    query analysis(key: ()) -> Result<(), ErrorGuaranteed> {
         eval_always
         desc { "running analysis passes on this crate" }
     }
@@ -1203,6 +1203,7 @@ rustc_queries! {
     query live_symbols_and_ignored_derived_traits(_: ()) -> &'tcx (
         LocalDefIdSet,
         LocalDefIdMap<FxIndexSet<DefId>>,
+        i32,
     ) {
         arena_cache
         desc { "finding live symbols in crate" }

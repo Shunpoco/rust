@@ -4,11 +4,12 @@
 // is dead.
 
 use std::mem;
+use std::ops::ControlFlow;
 
 use hir::def_id::{LocalDefIdMap, LocalDefIdSet};
 use rustc_abi::FieldIdx;
 use rustc_data_structures::fx::FxIndexSet;
-use rustc_errors::MultiSpan;
+use rustc_errors::{ErrorGuaranteed, MultiSpan};
 use rustc_hir::def::{CtorOf, DefKind, Res};
 use rustc_hir::def_id::{DefId, LocalDefId, LocalModDefId};
 use rustc_hir::intravisit::{self, Visitor};
@@ -178,12 +179,12 @@ impl<'tcx> MarkSymbolVisitor<'tcx> {
             .iter()
             .any(|adj| matches!(adj.kind, ty::adjustment::Adjust::Deref(_)))
         {
-            self.visit_expr(expr);
+            let _ = self.visit_expr(expr);
         } else if let hir::ExprKind::Field(base, ..) = expr.kind {
             // Ignore write to field
-            self.handle_assign(base);
+            let _ = self.handle_assign(base);
         } else {
-            self.visit_expr(expr);
+            let _ = self.visit_expr(expr);
         }
     }
 
@@ -318,7 +319,7 @@ impl<'tcx> MarkSymbolVisitor<'tcx> {
         }
     }
 
-    fn mark_live_symbols(&mut self) {
+    fn mark_live_symbols(&mut self) -> <MarkSymbolVisitor<'tcx> as Visitor<'tcx>>::Result {
         while let Some(work) = self.worklist.pop() {
             let (mut id, comes_from_allow_expect) = work;
 
@@ -366,8 +367,16 @@ impl<'tcx> MarkSymbolVisitor<'tcx> {
                 continue;
             }
 
-            self.visit_node(self.tcx.hir_node_by_def_id(id));
+            let r = self.visit_node(self.tcx.hir_node_by_def_id(id));
+            match r {
+                ControlFlow::Break(guar) => {
+                    return ControlFlow::Break(guar);
+                },
+                ControlFlow::Continue(_a) => {},
+            }            
         }
+
+        ControlFlow::Continue(())
     }
 
     /// Automatically generated items marked with `rustc_trivial_field_reads`
@@ -395,11 +404,11 @@ impl<'tcx> MarkSymbolVisitor<'tcx> {
         false
     }
 
-    fn visit_node(&mut self, node: Node<'tcx>) {
+    fn visit_node(&mut self, node: Node<'tcx>) -> <MarkSymbolVisitor<'tcx> as Visitor<'tcx>>::Result {
         if let Node::ImplItem(hir::ImplItem { owner_id, .. }) = node
             && self.should_ignore_item(owner_id.to_def_id())
         {
-            return;
+            return ControlFlow::Continue(());
         }
 
         let unconditionally_treated_fields_as_live =
@@ -407,7 +416,7 @@ impl<'tcx> MarkSymbolVisitor<'tcx> {
         let had_repr_simd = self.repr_has_repr_simd;
         self.repr_unconditionally_treats_fields_as_live = false;
         self.repr_has_repr_simd = false;
-        match node {
+        let r = match node {
             Node::Item(item) => match item.kind {
                 hir::ItemKind::Struct(..) | hir::ItemKind::Union(..) => {
                     let def = self.tcx.adt_def(item.owner_id);
@@ -417,7 +426,7 @@ impl<'tcx> MarkSymbolVisitor<'tcx> {
 
                     intravisit::walk_item(self, item)
                 }
-                hir::ItemKind::ForeignMod { .. } => {}
+                hir::ItemKind::ForeignMod { .. } => ControlFlow::Continue(()),
                 hir::ItemKind::Trait(.., trait_item_refs) => {
                     // mark assoc ty live if the trait is live
                     for trait_item in trait_item_refs {
@@ -435,7 +444,7 @@ impl<'tcx> MarkSymbolVisitor<'tcx> {
                 if let Some(trait_id) = self.tcx.trait_of_assoc(trait_item_id) {
                     self.check_def_id(trait_id);
                 }
-                intravisit::walk_trait_item(self, trait_item);
+                intravisit::walk_trait_item(self, trait_item)
             }
             Node::ImplItem(impl_item) => {
                 let item = self.tcx.local_parent(impl_item.owner_id.def_id);
@@ -456,16 +465,18 @@ impl<'tcx> MarkSymbolVisitor<'tcx> {
                         _ => {}
                     }
                 }
-                intravisit::walk_impl_item(self, impl_item);
+                intravisit::walk_impl_item(self, impl_item)
             }
             Node::ForeignItem(foreign_item) => {
-                intravisit::walk_foreign_item(self, foreign_item);
+                intravisit::walk_foreign_item(self, foreign_item)
             }
             Node::OpaqueTy(opaq) => intravisit::walk_opaque_ty(self, opaq),
-            _ => {}
-        }
+            _ => ControlFlow::Continue(())
+        };
         self.repr_has_repr_simd = had_repr_simd;
         self.repr_unconditionally_treats_fields_as_live = unconditionally_treated_fields_as_live;
+
+        r
     }
 
     fn mark_as_used_if_union(&mut self, adt: ty::AdtDef<'tcx>, fields: &[hir::ExprField<'_>]) {
@@ -520,22 +531,26 @@ impl<'tcx> MarkSymbolVisitor<'tcx> {
 }
 
 impl<'tcx> Visitor<'tcx> for MarkSymbolVisitor<'tcx> {
-    fn visit_nested_body(&mut self, body: hir::BodyId) {
+    type Result = ControlFlow<ErrorGuaranteed>;
+
+    fn visit_nested_body(&mut self, body: hir::BodyId) -> Self::Result {
         let typeck_results = self.tcx.typeck_body(body);
 
         // The result shouldn't be tainted.
-        if typeck_results.tainted_by_errors.is_some() {
-            return;
+        if let Some(guar) = typeck_results.tainted_by_errors {
+            return ControlFlow::Break(guar);
         }
 
         let old_maybe_typeck_results =
             self.maybe_typeck_results.replace(typeck_results);
         let body = self.tcx.hir_body(body);
-        self.visit_body(body);
+        let r = self.visit_body(body);
         self.maybe_typeck_results = old_maybe_typeck_results;
+
+        r
     }
 
-    fn visit_variant_data(&mut self, def: &'tcx hir::VariantData<'tcx>) {
+    fn visit_variant_data(&mut self, def: &'tcx hir::VariantData<'tcx>) -> Self::Result {
         let tcx = self.tcx;
         let unconditionally_treat_fields_as_live = self.repr_unconditionally_treats_fields_as_live;
         let has_repr_simd = self.repr_has_repr_simd;
@@ -552,10 +567,10 @@ impl<'tcx> Visitor<'tcx> for MarkSymbolVisitor<'tcx> {
         });
         self.live_symbols.extend(live_fields);
 
-        intravisit::walk_struct_def(self, def);
+        intravisit::walk_struct_def(self, def)
     }
 
-    fn visit_expr(&mut self, expr: &'tcx hir::Expr<'tcx>) {
+    fn visit_expr(&mut self, expr: &'tcx hir::Expr<'tcx>) -> Self::Result {
         match expr.kind {
             hir::ExprKind::Path(ref qpath @ QPath::TypeRelative(..)) => {
                 let res = self.typeck_results().qpath_res(qpath, expr.hir_id);
@@ -591,20 +606,22 @@ impl<'tcx> Visitor<'tcx> for MarkSymbolVisitor<'tcx> {
             _ => (),
         }
 
-        intravisit::walk_expr(self, expr);
+        intravisit::walk_expr(self, expr)
     }
 
-    fn visit_arm(&mut self, arm: &'tcx hir::Arm<'tcx>) {
+    fn visit_arm(&mut self, arm: &'tcx hir::Arm<'tcx>) -> Self::Result {
         // Inside the body, ignore constructions of variants
         // necessary for the pattern to match. Those construction sites
         // can't be reached unless the variant is constructed elsewhere.
         let len = self.ignore_variant_stack.len();
         self.ignore_variant_stack.extend(arm.pat.necessary_variants());
-        intravisit::walk_arm(self, arm);
+        let r = intravisit::walk_arm(self, arm);
         self.ignore_variant_stack.truncate(len);
+
+        r
     }
 
-    fn visit_pat(&mut self, pat: &'tcx hir::Pat<'tcx>) {
+    fn visit_pat(&mut self, pat: &'tcx hir::Pat<'tcx>) -> Self::Result {
         self.in_pat = true;
         match pat.kind {
             PatKind::Struct(ref path, fields, _) => {
@@ -618,11 +635,13 @@ impl<'tcx> Visitor<'tcx> for MarkSymbolVisitor<'tcx> {
             _ => (),
         }
 
-        intravisit::walk_pat(self, pat);
+        let r = intravisit::walk_pat(self, pat);
         self.in_pat = false;
+
+        r
     }
 
-    fn visit_pat_expr(&mut self, expr: &'tcx rustc_hir::PatExpr<'tcx>) {
+    fn visit_pat_expr(&mut self, expr: &'tcx rustc_hir::PatExpr<'tcx>) -> Self::Result {
         match &expr.kind {
             rustc_hir::PatExprKind::Path(qpath) => {
                 // mark the type of variant live when meeting E::V in expr
@@ -635,37 +654,41 @@ impl<'tcx> Visitor<'tcx> for MarkSymbolVisitor<'tcx> {
             }
             _ => {}
         }
-        intravisit::walk_pat_expr(self, expr);
+        intravisit::walk_pat_expr(self, expr)
     }
 
-    fn visit_path(&mut self, path: &hir::Path<'tcx>, _: hir::HirId) {
+    fn visit_path(&mut self, path: &hir::Path<'tcx>, _: hir::HirId) -> Self::Result {
         self.handle_res(path.res);
-        intravisit::walk_path(self, path);
+        intravisit::walk_path(self, path)
     }
 
-    fn visit_anon_const(&mut self, c: &'tcx hir::AnonConst) {
+    fn visit_anon_const(&mut self, c: &'tcx hir::AnonConst) -> Self::Result {
         // When inline const blocks are used in pattern position, paths
         // referenced by it should be considered as used.
         let in_pat = mem::replace(&mut self.in_pat, false);
 
         self.live_symbols.insert(c.def_id);
-        intravisit::walk_anon_const(self, c);
+        let r = intravisit::walk_anon_const(self, c);
 
         self.in_pat = in_pat;
+
+        r
     }
 
-    fn visit_inline_const(&mut self, c: &'tcx hir::ConstBlock) {
+    fn visit_inline_const(&mut self, c: &'tcx hir::ConstBlock) -> Self::Result {
         // When inline const blocks are used in pattern position, paths
         // referenced by it should be considered as used.
         let in_pat = mem::replace(&mut self.in_pat, false);
 
         self.live_symbols.insert(c.def_id);
-        intravisit::walk_inline_const(self, c);
+        let r = intravisit::walk_inline_const(self, c);
 
         self.in_pat = in_pat;
+
+        r
     }
 
-    fn visit_trait_ref(&mut self, t: &'tcx hir::TraitRef<'tcx>) {
+    fn visit_trait_ref(&mut self, t: &'tcx hir::TraitRef<'tcx>) -> Self::Result {
         if let Some(trait_def_id) = t.path.res.opt_def_id()
             && let Some(segment) = t.path.segments.last()
             && let Some(args) = segment.args
@@ -687,7 +710,7 @@ impl<'tcx> Visitor<'tcx> for MarkSymbolVisitor<'tcx> {
             }
         }
 
-        intravisit::walk_trait_ref(self, t);
+        intravisit::walk_trait_ref(self, t)
     }
 }
 
@@ -834,7 +857,7 @@ fn create_and_seed_worklist(
 fn live_symbols_and_ignored_derived_traits(
     tcx: TyCtxt<'_>,
     (): (),
-) -> (LocalDefIdSet, LocalDefIdMap<FxIndexSet<DefId>>) {
+) -> (LocalDefIdSet, LocalDefIdMap<FxIndexSet<DefId>>, i32) {
     let (worklist, mut unsolved_items) = create_and_seed_worklist(tcx);
     let mut symbol_visitor = MarkSymbolVisitor {
         worklist,
@@ -848,7 +871,9 @@ fn live_symbols_and_ignored_derived_traits(
         ignore_variant_stack: vec![],
         ignored_derived_traits: Default::default(),
     };
-    symbol_visitor.mark_live_symbols();
+    if let ControlFlow::Break(_guar) = symbol_visitor.mark_live_symbols() {
+        return (symbol_visitor.live_symbols, symbol_visitor.ignored_derived_traits, -1);
+    }
 
     // We have marked the primary seeds as live. We now need to process unsolved items from traits
     // and trait impls: add them to the work list if the trait or the implemented type is live.
@@ -862,14 +887,16 @@ fn live_symbols_and_ignored_derived_traits(
         symbol_visitor
             .worklist
             .extend(items_to_check.drain(..).map(|id| (id, ComesFromAllowExpect::No)));
-        symbol_visitor.mark_live_symbols();
+        if let ControlFlow::Break(_guar) = symbol_visitor.mark_live_symbols() {
+            return (symbol_visitor.live_symbols, symbol_visitor.ignored_derived_traits, -1);
+        }
 
         items_to_check.extend(unsolved_items.extract_if(.., |&mut local_def_id| {
             symbol_visitor.check_impl_or_impl_item_live(local_def_id)
         }));
     }
 
-    (symbol_visitor.live_symbols, symbol_visitor.ignored_derived_traits)
+    (symbol_visitor.live_symbols, symbol_visitor.ignored_derived_traits, 0)
 }
 
 struct DeadItem {
@@ -1149,7 +1176,10 @@ impl<'tcx> DeadVisitor<'tcx> {
 }
 
 fn check_mod_deathness(tcx: TyCtxt<'_>, module: LocalModDefId) {
-    let (live_symbols, ignored_derived_traits) = tcx.live_symbols_and_ignored_derived_traits(());
+    let (live_symbols, ignored_derived_traits, success) = tcx.live_symbols_and_ignored_derived_traits(());
+    if *success == -1 {
+        println!("hoge!");
+    }
     let mut visitor = DeadVisitor { tcx, live_symbols, ignored_derived_traits };
 
     let module_items = tcx.hir_module_items(module);

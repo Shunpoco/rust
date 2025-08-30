@@ -1128,7 +1128,7 @@ fn run_required_analyses(tcx: TyCtxt<'_>) {
 
 /// Runs the type-checking, region checking and other miscellaneous analysis
 /// passes on the crate.
-fn analysis(tcx: TyCtxt<'_>, (): ()) {
+fn analysis(tcx: TyCtxt<'_>, (): ()) -> Result<(), ErrorGuaranteed> {
     run_required_analyses(tcx);
 
     let sess = tcx.sess;
@@ -1189,6 +1189,14 @@ fn analysis(tcx: TyCtxt<'_>, (): ()) {
         // we will fail to emit overlap diagnostics. Thus we invoke it here unconditionally.
         let _ = tcx.all_diagnostic_items(());
     });
+
+    if let Some(guar) = sess.dcx().has_errors() {
+        println!("koko");
+
+        return Err(guar);
+    }
+
+    Ok(())
 }
 
 /// Runs the codegen backend, after which the AST and analysis can
