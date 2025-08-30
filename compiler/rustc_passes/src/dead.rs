@@ -853,7 +853,7 @@ fn create_and_seed_worklist(
 fn live_symbols_and_ignored_derived_traits(
     tcx: TyCtxt<'_>,
     (): (),
-) -> (LocalDefIdSet, LocalDefIdMap<FxIndexSet<DefId>>, Result<(), ErrorGuaranteed>) {
+) -> Result<(LocalDefIdSet, LocalDefIdMap<FxIndexSet<DefId>>), ErrorGuaranteed> {
     let (worklist, mut unsolved_items) = create_and_seed_worklist(tcx);
     let mut symbol_visitor = MarkSymbolVisitor {
         worklist,
@@ -868,7 +868,7 @@ fn live_symbols_and_ignored_derived_traits(
         ignored_derived_traits: Default::default(),
     };
     if let ControlFlow::Break(guar) = symbol_visitor.mark_live_symbols() {
-        return (symbol_visitor.live_symbols, symbol_visitor.ignored_derived_traits, Err(guar));
+        return Err(guar);
     }
 
     // We have marked the primary seeds as live. We now need to process unsolved items from traits
@@ -884,7 +884,7 @@ fn live_symbols_and_ignored_derived_traits(
             .worklist
             .extend(items_to_check.drain(..).map(|id| (id, ComesFromAllowExpect::No)));
         if let ControlFlow::Break(guar) = symbol_visitor.mark_live_symbols() {
-            return (symbol_visitor.live_symbols, symbol_visitor.ignored_derived_traits, Err(guar));
+            return Err(guar);
         }
 
         items_to_check.extend(unsolved_items.extract_if(.., |&mut local_def_id| {
@@ -892,7 +892,7 @@ fn live_symbols_and_ignored_derived_traits(
         }));
     }
 
-    (symbol_visitor.live_symbols, symbol_visitor.ignored_derived_traits, Ok(()))
+    Ok((symbol_visitor.live_symbols, symbol_visitor.ignored_derived_traits))
 }
 
 struct DeadItem {
@@ -1172,10 +1172,13 @@ impl<'tcx> DeadVisitor<'tcx> {
 }
 
 fn check_mod_deathness(tcx: TyCtxt<'_>, module: LocalModDefId) {
-    let (live_symbols, ignored_derived_traits, result) = tcx.live_symbols_and_ignored_derived_traits(());
-    if result.is_err() {
+    let live_symbols_result = tcx.live_symbols_and_ignored_derived_traits(());
+    if live_symbols_result.is_err() {
         return;
     }
+
+    let (live_symbols, ignored_derived_traits) = live_symbols_result.as_ref().unwrap();
+
     let mut visitor = DeadVisitor { tcx, live_symbols, ignored_derived_traits };
 
     let module_items = tcx.hir_module_items(module);
