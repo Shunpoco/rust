@@ -49,6 +49,7 @@ pub fn expand_trait_aliases<'tcx>(
         match clause.kind().skip_binder() {
             ty::ClauseKind::Trait(trait_pred) => {
                 if tcx.is_trait_alias(trait_pred.def_id()) {
+                    println!("koko!");
                     queue.extend(
                         tcx.explicit_super_predicates_of(trait_pred.def_id())
                             .iter_identity_copied()
@@ -65,6 +66,10 @@ pub fn expand_trait_aliases<'tcx>(
                             }),
                     );
                 } else {
+                    // let a = clause.kind().rebind(trait_pred);
+                    // if a.polarity() != ty::PredicatePolarity::Positive {
+                    //     continue;
+                    // }
                     trait_preds.push((clause.kind().rebind(trait_pred), spans));
                 }
             }

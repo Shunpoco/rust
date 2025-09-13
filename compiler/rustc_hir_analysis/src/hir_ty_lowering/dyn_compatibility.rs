@@ -30,6 +30,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
         lifetime: &hir::Lifetime,
         representation: DynKind,
     ) -> Ty<'tcx> {
+        println!("lower_trait_object_ty");
         let tcx = self.tcx();
         let dummy_self = tcx.types.trait_object_dummy_self;
 
@@ -161,6 +162,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
 
         if let Some((principal_trait, ref spans)) = principal_trait {
             let principal_trait = principal_trait.map_bound(|trait_pred| {
+                println!("dyn_compatibility1");
                 assert_eq!(trait_pred.polarity, ty::PredicatePolarity::Positive);
                 trait_pred.trait_ref
             });
@@ -309,6 +311,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
         let principal_trait_ref = principal_trait.map(|(trait_pred, spans)| {
             trait_pred.map_bound(|trait_pred| {
                 let trait_ref = trait_pred.trait_ref;
+                println!("dyn_compatibility2: {:?}", trait_ref.def_id);
                 assert_eq!(trait_pred.polarity, ty::PredicatePolarity::Positive);
                 assert_eq!(trait_ref.self_ty(), dummy_self);
 
@@ -382,6 +385,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
         let mut auto_trait_predicates: Vec<_> = auto_traits
             .into_iter()
             .map(|(trait_pred, _)| {
+                println!("dyn_compatibility3");
                 assert_eq!(trait_pred.polarity(), ty::PredicatePolarity::Positive);
                 assert_eq!(trait_pred.self_ty().skip_binder(), dummy_self);
 

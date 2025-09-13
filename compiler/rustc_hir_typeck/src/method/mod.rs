@@ -472,18 +472,23 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         self_ty_span: Span,
         expr_id: hir::HirId,
     ) -> Result<(DefKind, DefId), MethodError<'tcx>> {
+        println!("{:?}", method_name.clone().span);
         let tcx = self.tcx;
 
         // Check if we have an enum variant.
         let mut struct_variant = None;
         if let ty::Adt(adt_def, _) = self_ty.kind() {
+            println!("adt");
             if adt_def.is_enum() {
+                println!("is_enum");
                 let variant_def = adt_def
                     .variants()
                     .iter()
                     .find(|vd| tcx.hygienic_eq(method_name, vd.ident(tcx), adt_def.did()));
                 if let Some(variant_def) = variant_def {
+                    println!("is_some");
                     if let Some((ctor_kind, ctor_def_id)) = variant_def.ctor {
+                        println!("is_some2");
                         tcx.check_stability(
                             ctor_def_id,
                             Some(expr_id),
@@ -492,6 +497,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                         );
                         return Ok((DefKind::Ctor(CtorOf::Variant, ctor_kind), ctor_def_id));
                     } else {
+                        println!("is_some_else");
                         struct_variant = Some((DefKind::Variant, variant_def.def_id));
                     }
                 }
@@ -507,6 +513,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             expr_id,
             ProbeScope::TraitsInScope,
         );
+        println!("mitatsu");
         let pick = match (pick, struct_variant) {
             // Fall back to a resolution that will produce an error later.
             (Err(_), Some(res)) => return Ok(res),

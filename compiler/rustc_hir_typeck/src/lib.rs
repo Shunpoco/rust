@@ -200,7 +200,7 @@ fn typeck_with_inspect<'tcx>(
 
         let wf_code = ObligationCauseCode::WellFormed(Some(WellFormedLoc::Ty(def_id)));
         fcx.register_wf_obligation(expected_type.into(), body.value.span, wf_code);
-
+        println!("check_expr_coercible_to_type ni hairuyo");
         fcx.check_expr_coercible_to_type(body.value, expected_type, None);
 
         fcx.write_ty(id, expected_type);

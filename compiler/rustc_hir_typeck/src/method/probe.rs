@@ -952,6 +952,7 @@ impl<'a, 'tcx> ProbeContext<'a, 'tcx> {
         let opt_applicable_traits = self.tcx.in_scope_traits(self.scope_expr_id);
         if let Some(applicable_traits) = opt_applicable_traits {
             for trait_candidate in applicable_traits.iter() {
+                println!("{:?}", trait_candidate.clone());
                 let trait_did = trait_candidate.def_id;
                 if duplicates.insert(trait_did) {
                     self.assemble_extension_candidates_for_trait(
@@ -995,15 +996,21 @@ impl<'a, 'tcx> ProbeContext<'a, 'tcx> {
         import_ids: &SmallVec<[LocalDefId; 1]>,
         trait_def_id: DefId,
     ) {
+        println!("assemble_extension_candidates_for_trait");
+        println!("{:?}", trait_def_id.clone());
         let trait_args = self.fresh_args_for_item(self.span, trait_def_id);
         let trait_ref = ty::TraitRef::new_from_args(self.tcx, trait_def_id, trait_args);
 
         if self.tcx.is_trait_alias(trait_def_id) {
             // For trait aliases, recursively assume all explicitly named traits are relevant
-            for (bound_trait_pred, _) in
-                traits::expand_trait_aliases(self.tcx, [(trait_ref.upcast(self.tcx), self.span)]).0
+            let v = traits::expand_trait_aliases(self.tcx, [(trait_ref.upcast(self.tcx), self.span)]);
+            println!("{:?}", v.0.clone());
+
+            for (bound_trait_pred, _) in v.0
+                // traits::expand_trait_aliases(self.tcx, [(trait_ref.upcast(self.tcx), self.span)]).0
             {
-                assert_eq!(bound_trait_pred.polarity(), ty::PredicatePolarity::Positive);
+                println!("error mae dayo");
+                // assert_eq!(bound_trait_pred.polarity(), ty::PredicatePolarity::Positive);
                 let bound_trait_ref = bound_trait_pred.map_bound(|pred| pred.trait_ref);
                 for item in self.impl_or_trait_item(bound_trait_ref.def_id()) {
                     if !self.has_applicable_self(&item) {

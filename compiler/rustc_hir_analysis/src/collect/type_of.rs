@@ -160,6 +160,7 @@ pub(super) fn type_of(tcx: TyCtxt<'_>, def_id: LocalDefId) -> ty::EarlyBinder<'_
             }
             TraitItemKind::Const(ty, body_id) => body_id
                 .and_then(|body_id| {
+                    println!("TraitItemKind::Const!");
                     ty.is_suggestable_infer_ty().then(|| {
                         infer_placeholder_type(
                             icx.lowerer(),
@@ -184,7 +185,9 @@ pub(super) fn type_of(tcx: TyCtxt<'_>, def_id: LocalDefId) -> ty::EarlyBinder<'_
                 Ty::new_fn_def(tcx, def_id.to_def_id(), args)
             }
             ImplItemKind::Const(ty, body_id) => {
+                println!("ImpleItemKind::Const!");
                 if ty.is_suggestable_infer_ty() {
+                    println!("if");
                     infer_placeholder_type(
                         icx.lowerer(),
                         def_id,
@@ -194,6 +197,7 @@ pub(super) fn type_of(tcx: TyCtxt<'_>, def_id: LocalDefId) -> ty::EarlyBinder<'_
                         "associated constant",
                     )
                 } else {
+                    println!("else");
                     icx.lower_ty(ty)
                 }
             }
@@ -230,7 +234,9 @@ pub(super) fn type_of(tcx: TyCtxt<'_>, def_id: LocalDefId) -> ty::EarlyBinder<'_
                 }
             }
             ItemKind::Const(ident, _, ty, body_id) => {
+                println!("ItemKind::Const!");
                 if ty.is_suggestable_infer_ty() {
+                    println!("if");
                     infer_placeholder_type(
                         icx.lowerer(),
                         def_id,
@@ -240,6 +246,7 @@ pub(super) fn type_of(tcx: TyCtxt<'_>, def_id: LocalDefId) -> ty::EarlyBinder<'_
                         "constant",
                     )
                 } else {
+                    println!("else");
                     icx.lower_ty(ty)
                 }
             }
@@ -331,11 +338,14 @@ pub(super) fn type_of(tcx: TyCtxt<'_>, def_id: LocalDefId) -> ty::EarlyBinder<'_
             bug!("unexpected sort of node in type_of(): {:?}", x);
         }
     };
+    println!("kokonikitayo");
     if let Err(e) = icx.check_tainted_by_errors()
         && !output.references_error()
     {
+        println!("aaa");
         ty::EarlyBinder::bind(Ty::new_error(tcx, e))
     } else {
+        println!("bbb");
         ty::EarlyBinder::bind(output)
     }
 }
@@ -430,8 +440,10 @@ fn infer_placeholder_type<'tcx>(
     item_ident: Ident,
     kind: &'static str,
 ) -> Ty<'tcx> {
+    println!("infer_placeholder_type");
     let tcx = cx.tcx();
     let ty = tcx.typeck(def_id).node_type(body_id.hir_id);
+    println!("beyond typeck");
 
     // If this came from a free `const` or `static mut?` item,
     // then the user may have written e.g. `const A = 42;`.

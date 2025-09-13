@@ -232,7 +232,9 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         expected: Expectation<'tcx>,
         call_expr_and_args: Option<(&'tcx hir::Expr<'tcx>, &'tcx [hir::Expr<'tcx>])>,
     ) -> Ty<'tcx> {
+        println!("check_expr_with_expectation_and_args");
         if self.tcx().sess.verbose_internals() {
+            println!("check_expr_with_expectation_and_args1");
             // make this code only run with -Zverbose-internals because it is probably slow
             if let Ok(lint_str) = self.tcx.sess.source_map().span_to_snippet(expr.span) {
                 if !lint_str.contains('\n') {
@@ -247,6 +249,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 }
             }
         }
+        println!("check_expr_with_expectation_and_args2");
 
         // True if `expr` is a `Try::from_ok(())` that is a result of desugaring a try block
         // without the final expr (e.g. `try { return; }`). We don't want to generate an
@@ -258,29 +261,104 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             }
             _ => false,
         };
+        println!("check_expr_with_expectation_and_args3");
 
         // Warn for expressions after diverging siblings.
         if !is_try_block_generated_unit_expr {
+            println!("check_expr_with_expectation_and_args4");
             self.warn_if_unreachable(expr.hir_id, expr.span, "expression");
         }
-
+        println!("check_expr_with_expectation_and_args5");
         // Whether a past expression diverges doesn't affect typechecking of this expression, so we
         // reset `diverges` while checking `expr`.
         let old_diverges = self.diverges.replace(Diverges::Maybe);
-
+        println!("check_expr_with_expectation_and_args6");
         if self.is_whole_body.replace(false) {
+            println!("check_expr_with_expectation_and_args7");
             // If this expression is the whole body and the function diverges because of its
             // arguments, we check this here to ensure the body is considered to diverge.
             self.diverges.set(self.function_diverges_because_of_empty_arguments.get())
         };
-
+        println!("check_expr_with_expectation_and_args8");
         let ty = ensure_sufficient_stack(|| match &expr.kind {
             // Intercept the callee path expr and give it better spans.
             hir::ExprKind::Path(
-                qpath @ (hir::QPath::Resolved(..) | hir::QPath::TypeRelative(..)),
-            ) => self.check_expr_path(qpath, expr, call_expr_and_args),
-            _ => self.check_expr_kind(expr, expected),
+                // qpath @ (hir::QPath::Resolved(..) | hir::QPath::TypeRelative(..)),
+                qpath @ hir::QPath::Resolved(..),
+            ) => {
+                println!("check_expr_with_expectation_and_args8-1-1");
+                self.check_expr_path(qpath, expr, call_expr_and_args)
+            },
+            hir::ExprKind::Path(qpath @ hir::QPath::TypeRelative(..)) => {
+                println!("check_expr_with_expectation_and_args8-1-2");
+                self.check_expr_path(qpath, expr, call_expr_and_args)
+            },
+            hir::ExprKind::Path(_) => {
+                println!("check_expr_with_expectation_and_args8-1-3");
+                self.check_expr_kind(expr, expected)
+            },
+            hir::ExprKind::Call(_, _) => {
+                println!("check_expr_with_expectation_and_args8-3");
+                self.check_expr_kind(expr, expected)
+            },
+            hir::ExprKind::MethodCall(_, _, _, _) => {
+                println!("check_expr_with_expectation_and_args8-4");
+                self.check_expr_kind(expr, expected)
+            },
+            hir::ExprKind::Binary(_, _, _) => {
+                println!("check_expr_with_expectation_and_args8-5");
+                self.check_expr_kind(expr, expected)
+            },
+            hir::ExprKind::Unary(_, _) => {
+                println!("check_expr_with_expectation_and_args8-6");
+                self.check_expr_kind(expr, expected)
+            },
+            hir::ExprKind::Lit(_) => {
+                println!("check_expr_with_expectation_and_args8-7");
+                self.check_expr_kind(expr, expected)
+            },
+            hir::ExprKind::Block(_, _) => {
+                println!("check_expr_with_expectation_and_args8-8");
+                self.check_expr_kind(expr, expected)
+            },
+            hir::ExprKind::If(_, _, _) => {
+                println!("check_expr_with_expectation_and_args8-9");
+                self.check_expr_kind(expr, expected)
+            },
+            hir::ExprKind::Match(_, _, _) => {
+                println!("check_expr_with_expectation_and_args8-10");
+                self.check_expr_kind(expr, expected)
+            },
+            hir::ExprKind::Loop(_, _, _, _) => {
+                println!("check_expr_with_expectation_and_args8-11");
+                self.check_expr_kind(expr, expected)
+            },
+            hir::ExprKind::Struct(_, _, _) => {
+                println!("check_expr_with_expectation_and_args8-12");
+                self.check_expr_kind(expr, expected)
+            },
+            hir::ExprKind::Array(_) => {
+                println!("check_expr_with_expectation_and_args8-13");
+                self.check_expr_kind(expr, expected)
+            },
+            hir::ExprKind::Tup(_) => {
+                println!("check_expr_with_expectation_and_args8-14");
+                self.check_expr_kind(expr, expected)
+            },
+            hir::ExprKind::Field(_, _) => {
+                println!("check_expr_with_expectation_and_args8-15");
+                self.check_expr_kind(expr, expected)
+            },
+            hir::ExprKind::Index(_, _, _) => {
+                println!("check_expr_with_expectation_and_args8-16");
+                self.check_expr_kind(expr, expected)
+            },
+            _ => {
+                println!("check_expr_with_expectation_and_args8-other");
+                self.check_expr_kind(expr, expected)
+            },
         });
+        println!("check_expr_with_expectation_and_args9");
         let ty = self.resolve_vars_if_possible(ty);
 
         // Warn for non-block expressions with diverging children.
@@ -305,6 +383,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             }
             _ => self.warn_if_unreachable(expr.hir_id, expr.span, "expression"),
         }
+        println!("check_expr_with_expectation_and_args10");
 
         // Any expression that produces a value of type `!` must have diverged,
         // unless it's a place expression that isn't being read from, in which case
@@ -315,14 +394,17 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         {
             self.diverges.set(self.diverges.get() | Diverges::always(expr.span));
         }
+        println!("check_expr_with_expectation_and_args11");
 
         // Record the type, which applies it effects.
         // We need to do this after the warning above, so that
         // we don't warn for the diverging expression itself.
         self.write_ty(expr.hir_id, ty);
+        println!("check_expr_with_expectation_and_args12");
 
         // Combine the diverging and has_error flags.
         self.diverges.set(self.diverges.get() | old_diverges);
+        println!("check_expr_with_expectation_and_args13");
 
         debug!("type of {} is...", self.tcx.hir_id_to_string(expr.hir_id));
         debug!("... {:?}, expected is {:?}", ty, expected);
@@ -2589,7 +2671,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                         .tcx
                         .fn_sig(item.def_id)
                         .instantiate(self.tcx, self.fresh_args_for_item(span, item.def_id));
-                    let ret_ty = self.tcx.instantiate_bound_regions_with_erased(fn_sig.output());
+                    let ret_ty = fn_sig.output().skip_binder();
                     if !self.can_eq(self.param_env, ret_ty, adt_ty) {
                         return None;
                     }
@@ -3218,7 +3300,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 "to access the field, dereference first",
                 vec![
                     (base_expr.span.shrink_to_lo(), "(*".to_string()),
-                    (base_expr.span.shrink_to_hi(), ")".to_string()),
+                    (base_expr.span.between(field.span), format!(").")),
                 ],
                 Applicability::MaybeIncorrect,
             );
@@ -3876,7 +3958,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                         self.dcx()
                             .create_err(NoVariantNamed { span: ident.span, ident, ty: container })
                             .with_span_label(field.span, "variant not found")
-                            .emit_unless_delay(container.references_error());
+                            .emit();
                         break;
                     };
                     let Some(&subfield) = fields.next() else {
