@@ -11,8 +11,15 @@ use std::str::FromStr;
 use std::thread::{self, ScopedJoinHandle, scope};
 use std::{env, process};
 
+use clap::Parser;
 use tidy::diagnostics::{COLOR_ERROR, COLOR_SUCCESS, TidyCtx, TidyFlags, output_message};
 use tidy::*;
+
+#[derive(Parser)]
+#[command(version, about, long_about = None)]
+struct Hoge {
+    name: Vec<String>,
+}
 
 fn main() {
     // Enable nightly, because Cargo will read the libstd Cargo.toml
@@ -21,6 +28,9 @@ fn main() {
     unsafe {
         env::set_var("RUSTC_BOOTSTRAP", "1");
     }
+
+    let cli = Hoge::parse();
+    println!("{:#?}", cli.name);
 
     let root_path: PathBuf = env::args_os().nth(1).expect("need path to root of repo").into();
     let cargo: PathBuf = env::args_os().nth(2).expect("need path to cargo").into();
